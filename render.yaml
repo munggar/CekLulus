@@ -22,4 +22,4 @@ services:
       - key: GROQ_FALLBACK_MODEL
         value: qwen/qwen3.8-27b
       - key: USE_PG_MEM
-        value: "false"
+        value: "true"
