@@ -1,0 +1,19 @@
+{
+  "name": "CekLulus - Prediktor KHS & Studi",
+  "short_name": "CekLulus",
+  "description": "Aplikasi prediksi KHS, SKS, dan kelulusan berbasis web",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5fbf7",
+  "theme_color": "#002820",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

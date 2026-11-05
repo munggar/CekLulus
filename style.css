@@ -1,0 +1,8 @@
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:#f5fbf7;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:#171d1b;margin:0}
+.ms{font-family:'Material Symbols Outlined';font-weight:400;font-style:normal;line-height:1;display:inline-block;font-size:22px;font-variation-settings:'FILL' 0}
+.fill{font-variation-settings:'FILL' 1}
+input[type=range]{accent-color:#002820;width:100%}
+.bar{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 4px)}
+.blob{position:absolute;border-radius:9999px;filter:blur(60px);pointer-events:none}
+@media print{nav,header,button,#toast{display:none!important}}

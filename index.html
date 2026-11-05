@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5fbf7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>CekLulus – Prediktor KHS & Studi</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';</script>
+<script>tailwind.config={theme:{extend:{colors:{p:'#002820',pc:'#163e35',s:'#f5fbf7',sl:'#eff5f1',sc:'#e9efec',sch:'#e4e9e6',ov:'#414846',se:'#39675a',sec:'#b9eada',er:'#ba1a1a',erc:'#ffdad6',ero:'#93000a',pf:'#c1ebde',ol:'#c0c8c4'},fontFamily:{j:['Plus Jakarta Sans','system-ui','sans-serif']}}}}</script>
+<link rel="stylesheet" href="style.css"></head>
+<body>
+<div id="auth" class="hidden"></div>
+<header id="hd" class="sticky top-0 z-40 bg-s/90 backdrop-blur px-5 py-3 flex items-center justify-between max-w-xl mx-auto">
+ <div class="flex items-center gap-2.5"><div class="w-10 h-10 rounded-xl bg-pc text-white grid place-items-center"><span class="ms fill">school</span></div>
+ <div><div class="font-bold text-lg leading-5">CekLulus</div><div class="text-[10px] font-bold tracking-wider text-ov">PREDIKTOR KHS & STUDI</div></div></div>
+ <div class="flex items-center gap-3"><button onclick="toast('Tidak ada notifikasi baru')" class="relative"><span class="ms">notifications</span><i class="absolute top-0 right-0 w-2 h-2 rounded-full bg-er"></i></button>
+ <button id="av" onclick="profile()" class="w-9 h-9 rounded-full bg-sec text-p font-bold grid place-items-center">A</button></div>
+</header>
+<main id="app" class="max-w-xl mx-auto px-5 pb-32 pt-2"></main>
+<nav class="fixed bottom-0 inset-x-0 z-50 bg-s/95 backdrop-blur-xl shadow-[0_-2px_12px_rgba(22,62,53,.08)] bar"><div id="nav" class="max-w-xl mx-auto flex justify-around pt-2"></div></nav>
+<div id="modal"></div><div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 z-[70] hidden bg-pc text-white text-sm px-4 py-2 rounded-full"></div>
+<script>
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+<script src="app.js"></script></body></html>
