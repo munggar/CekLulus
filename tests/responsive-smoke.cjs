@@ -99,7 +99,9 @@ async function main() {
             width: window.innerWidth,
             scrollWidth: root.scrollWidth,
             appWidth: app?.getBoundingClientRect().width || 0,
-            titleVisible: !title || (titleRect.width > 0 && titleRect.right <= window.innerWidth + 2),
+            titleVisible: !title || (titleRect.width > 0 && titleRect.left >= -2 && titleRect.right <= window.innerWidth + 2),
+            titleRect: titleRect ? { left:titleRect.left, right:titleRect.right, top:titleRect.top, bottom:titleRect.bottom, width:titleRect.width, font:getComputedStyle(title).fontSize, text:title.textContent } : null,
+            appRect: app ? { left:app.getBoundingClientRect().left, right:app.getBoundingClientRect().right, width:app.getBoundingClientRect().width } : null,
             titleDescriptionOverlap: !!(titleRect && descriptionRect &&
               titleRect.left < descriptionRect.right &&
               titleRect.right > descriptionRect.left &&
