@@ -182,13 +182,13 @@ function summarizeStudent(student) {
 function normalizeAcademicKey(value) {
   return String(value || '')
     .normalize('NFD')
-    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/^[a-z]{0,5}[-.]?\\d{4,}\\s*/, '')
-    .replace(/\\b\\d{5,}\\b/g, '')
+    .replace(/^[a-z]{0,5}[-.]?\d{4,}\s*/, '')
+    .replace(/\b\d{5,}\b/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-    .replace(/\\s+/g, ' ');
+    .replace(/\s+/g, ' ');
 }
 
 function calculateGraduationAnalysis(student, summary) {
@@ -219,7 +219,7 @@ function calculateGraduationAnalysis(student, summary) {
   const passed = [...bestByKey.values()].filter(course=>(gradePoints[course.grade]??-1)>=1);
   const passedSks = passed.reduce((sum,course)=>sum+Number(course.sks||0),0);
   const required = curriculum.filter(course=>
-    /^wajib\\b/i.test(String(course.notes||'')) ||
+    /^wajib\b/i.test(String(course.notes||'')) ||
     /^(praktik kerja|skripsi)$/i.test(String(course.name||''))
   );
   const missing = required.filter(course=>{
@@ -874,7 +874,7 @@ Pertanyaan: ${message}`;
           .replace(/&amp;/gi, '&')
           .replace(/&lt;/gi, '<')
           .replace(/&gt;/gi, '>')
-          .replace(/\\s+/g, ' ')
+          .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 1800)
       }))
