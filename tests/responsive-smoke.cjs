@@ -229,6 +229,15 @@ async function main() {
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       buffer: importBuffer
     });
+    const inputState = await page.evaluate(() => ({
+      fileCount: document.querySelector('#curriculum_excel')?.files?.length || 0,
+      fileName: document.querySelector('#curriculum_excel')?.files?.[0]?.name || '',
+      handler: document.querySelector('#curriculum_excel')?.getAttribute('onchange'),
+      parser: typeof previewCurriculumExcel
+    }));
+    assert.equal(inputState.fileCount, 1, `Excel file must be attached to the admin input: ${JSON.stringify(inputState)}`);
+    assert.equal(inputState.parser, 'function', 'Admin Excel parser must be available.');
+    await page.evaluate(() => previewCurriculumExcel(document.querySelector('#curriculum_excel')));
     await page.waitForFunction(() => (document.querySelector('#curriculum-preview')?.innerText || '').trim().length > 0);
     const preview = await page.evaluate(() => ({
       text: document.querySelector('#curriculum-preview')?.innerText || '',
