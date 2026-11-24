@@ -2,9 +2,11 @@ const assert = require('node:assert/strict');
 
 const baseUrl = process.env.CEKLULUS_PRODUCTION_URL || 'https://ceklulus.onrender.com';
 
-async function fetchJson(path) {
+async function fetchJson(path, method = 'GET') {
   const response = await fetch(new URL(path, baseUrl), {
+    method,
     headers: { 'Cache-Control': 'no-cache' },
+    ...(method === 'POST' ? { body: '{}' } : {}),
     signal: AbortSignal.timeout(15000)
   });
   const body = await response.json().catch(() => ({}));
@@ -43,7 +45,7 @@ async function main() {
   const curriculum = await fetchJson('/api/curriculum');
   assert.equal(curriculum.status, 401, 'Curriculum endpoint must require a signed-in user.');
 
-  const guest = await fetchJson('/api/auth/guest');
+  const guest = await fetchJson('/api/auth/guest', 'POST');
   assert.notEqual(guest.status, 201, 'Production must not create demo guest users.');
 
   console.log('Production readiness check passed: public health, persistent database flag, authentication, frontend assets, protected curriculum route, and guest demo disabled.');
