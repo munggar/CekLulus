@@ -274,7 +274,7 @@ function readToken(token) {
 }
 
 function publicUser(user) {
-  return { id: user.id, name: user.name, prodi: user.prodi || '', role: user.role, guest: user.guest };
+  return { id: user.id, name: user.name, prodi: user.prodi || '', angkatan: user.angkatan ? Number(user.angkatan) : null, role: user.role, guest: user.guest };
 }
 
 async function authRequired(req, res, next) {
@@ -283,7 +283,7 @@ async function authRequired(req, res, next) {
   if (!payload) return res.status(401).json({ error: 'Sesi tidak valid atau sudah berakhir. Silakan masuk kembali.' });
   try {
     const result = await pool.query(
-      'SELECT id, name, prodi, role, guest FROM users WHERE id = $1',
+      'SELECT id, name, prodi, angkatan, role, guest FROM users WHERE id = $1',
       [payload.sub]
     );
     if (!result.rowCount) return res.status(401).json({ error: 'Akun tidak ditemukan. Silakan masuk kembali.' });
@@ -340,11 +340,36 @@ async function initializeDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS angkatan INTEGER');
   await pool.query(`
     INSERT INTO app_settings (key, value)
     VALUES ('study_rules', $1::jsonb)
     ON CONFLICT (key) DO NOTHING
   `, [JSON.stringify(DEFAULT_SETTINGS)]);
+
+  const existingCurriculum = await pool.query("SELECT value FROM app_settings WHERE key = 'curriculum' LIMIT 1");
+  if (!existingCurriculum.rowCount) {
+    const curriculumFile = path.join(__dirname, 'data', 'curriculum-sti.json');
+    if (fs.existsSync(curriculumFile)) {
+      const source = JSON.parse(fs.readFileSync(curriculumFile, 'utf8'));
+      const seed = {
+        meta: {
+          sourceFile: source.sourceFile || 'Curriculum import',
+          program: source.program || 'Program Studi',
+          institution: source.institution || '',
+          sheet: source.sheet || '',
+          importedAt: new Date().toISOString(),
+          importedBy: 'system-seed',
+          courseCount: Array.isArray(source.courses) ? source.courses.length : 0
+        },
+        courses: Array.isArray(source.courses) ? source.courses : []
+      };
+      await pool.query(
+        "INSERT INTO app_settings (key, value, updated_at) VALUES ('curriculum', $1::jsonb, NOW()) ON CONFLICT (key) DO NOTHING",
+        [JSON.stringify(seed)]
+      );
+    }
+  }
 
   const adminId = (process.env.ADMIN_USERNAME || '').trim();
   const adminPassword = process.env.ADMIN_PASSWORD || '';
@@ -382,8 +407,13 @@ app.post('/api/auth/register', async (req, res, next) => {
   const name = String(req.body?.name || '').trim();
   const prodi = String(req.body?.prodi || '').trim();
   const password = String(req.body?.password || '');
+  const angkatanInput = req.body?.angkatan;
+  const angkatan = angkatanInput === undefined || angkatanInput === null || angkatanInput === '' ? null : Number(angkatanInput);
   if (id.length < 2 || id.length > 100 || name.length < 2 || name.length > 150 || prodi.length > 150 || password.length < 8 || password.length > 128) {
     return res.status(400).json({ error: 'Nama, NIM/email, atau kata sandi tidak memenuhi ketentuan (sandi minimal 8 karakter).' });
+  }
+  if (angkatan !== null && (!Number.isInteger(angkatan) || angkatan < 2000 || angkatan > new Date().getFullYear())) {
+    return res.status(400).json({ error: 'Tahun angkatan harus berupa tahun yang valid.' });
   }
   let client;
   try {
@@ -391,10 +421,10 @@ app.post('/api/auth/register', async (req, res, next) => {
     client = await pool.connect();
     await client.query('BEGIN');
     const result = await client.query(`
-      INSERT INTO users (id, name, prodi, role, password_salt, password_hash)
-      VALUES ($1, $2, $3, 'student', $4, $5)
-      RETURNING id, name, prodi, role, guest
-    `, [id, name, prodi, salt, hash]);
+      INSERT INTO users (id, name, prodi, angkatan, role, password_salt, password_hash)
+      VALUES ($1, $2, $3, $4, 'student', $5, $6)
+      RETURNING id, name, prodi, angkatan, role, guest
+    `, [id, name, prodi, angkatan, salt, hash]);
     const user = result.rows[0];
     await client.query('INSERT INTO student_data (user_id, state) VALUES ($1, $2::jsonb)', [
       user.id, JSON.stringify(initialStudentData())
@@ -443,9 +473,9 @@ app.post('/api/auth/guest', async (req, res, next) => {
     client = await pool.connect();
     await client.query('BEGIN');
     const result = await client.query(`
-      INSERT INTO users (id, name, prodi, role, guest)
-      VALUES ($1, 'Alya', 'Teknik Informatika', 'student', TRUE)
-      RETURNING id, name, prodi, role, guest
+      INSERT INTO users (id, name, prodi, angkatan, role, guest)
+      VALUES ($1, 'Alya', 'Sistem dan Teknologi Informasi', NULL, 'student', TRUE)
+      RETURNING id, name, prodi, angkatan, role, guest
     `, [id]);
     const user = result.rows[0];
     await client.query('INSERT INTO student_data (user_id, state) VALUES ($1, $2::jsonb)', [
@@ -522,10 +552,98 @@ app.put('/api/settings', authRequired, adminRequired, async (req, res, next) => 
   }
 });
 
+app.get('/api/curriculum', authRequired, async (req, res, next) => {
+  try {
+    const result = await pool.query("SELECT value FROM app_settings WHERE key = 'curriculum'");
+    return res.json(result.rows[0]?.value || { meta: null, courses: [] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/admin/curriculum', authRequired, adminRequired, async (req, res, next) => {
+  const rawCourses = req.body?.courses;
+  const sourceFile = String(req.body?.sourceFile || 'Curriculum.xlsx').slice(0, 180);
+  const program = String(req.body?.program || 'Program Studi').slice(0, 180);
+  const institution = String(req.body?.institution || '').slice(0, 180);
+  const sheet = String(req.body?.sheet || '').slice(0, 120);
+  if (!Array.isArray(rawCourses) || rawCourses.length < 1 || rawCourses.length > 500) {
+    return res.status(400).json({ error: 'File Excel tidak berisi data mata kuliah yang valid (1–500 baris).' });
+  }
+
+  const courses = [];
+  for (const row of rawCourses) {
+    const semester = Number(row?.semester);
+    const sks = Number(row?.sks);
+    const code = String(row?.code || '').trim().slice(0, 32);
+    const name = String(row?.name || '').trim().slice(0, 180);
+    if (!Number.isInteger(semester) || semester < 1 || semester > 14 ||
+        !Number.isInteger(sks) || sks < 1 || sks > 12 || !name) {
+      return res.status(400).json({ error: 'Ada baris Excel yang tidak valid. Periksa semester, nama mata kuliah, dan SKS.' });
+    }
+    courses.push({
+      semester,
+      code,
+      name,
+      category: String(row?.category || '').trim().slice(0, 120),
+      sks,
+      prerequisite: String(row?.prerequisite || '').trim().slice(0, 500),
+      notes: String(row?.notes || '').trim().slice(0, 500)
+    });
+  }
+
+  const duplicateCodes = Object.entries(courses.reduce((map, course) => {
+    if (course.code) map[course.code] = (map[course.code] || 0) + 1;
+    return map;
+  }, {})).filter(([, count]) => count > 1).map(([code]) => code);
+
+  const curriculum = {
+    meta: {
+      sourceFile,
+      program,
+      institution,
+      sheet,
+      importedAt: new Date().toISOString(),
+      importedBy: req.user.id,
+      courseCount: courses.length,
+      semesterCount: new Set(courses.map(course => course.semester)).size,
+      duplicateCodes
+    },
+    courses
+  };
+
+  try {
+    await pool.query(`
+      INSERT INTO app_settings (key, value, updated_at) VALUES ('curriculum', $1::jsonb, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `, [JSON.stringify(curriculum)]);
+    return res.json({ ok: true, meta: curriculum.meta });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.put('/api/admin/students/:id/angkatan', authRequired, adminRequired, async (req, res, next) => {
+  const angkatan = Number(req.body?.angkatan);
+  if (!Number.isInteger(angkatan) || angkatan < 2000 || angkatan > new Date().getFullYear()) {
+    return res.status(400).json({ error: 'Tahun angkatan tidak valid.' });
+  }
+  try {
+    const result = await pool.query(
+      "UPDATE users SET angkatan = $1 WHERE id = $2 AND role = 'student' AND guest = FALSE RETURNING id, angkatan",
+      [angkatan, req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: 'Akun mahasiswa tidak ditemukan.' });
+    return res.json({ ok: true, student: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.get('/api/admin/students', authRequired, adminRequired, async (req, res, next) => {
   try {
     const result = await pool.query(`
-      SELECT u.id, u.name, u.prodi, u.guest, COALESCE(d.state, '{}'::jsonb) AS data
+      SELECT u.id, u.name, u.prodi, u.angkatan, u.guest, COALESCE(d.state, '{}'::jsonb) AS data
       FROM users u
       LEFT JOIN student_data d ON d.user_id = u.id
       WHERE u.role = 'student' AND u.guest = FALSE
