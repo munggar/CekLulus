@@ -23,7 +23,7 @@ input[type=range]{accent-color:#002820;width:100%}
 html,body{width:100%;min-width:320px;max-width:100%;overflow-x:hidden}
 html{scroll-behavior:smooth;scroll-padding-top:calc(env(safe-area-inset-top,0px) + 72px)}
 body{min-height:100vh;min-height:100dvh}
-#hd,#app,#nav{width:100%;min-width:0;max-width:100%}
+#hd,#app,#nav{width:100%;min-width:0;max-width:72rem;margin-inline:auto}
 #app{overflow-x:clip}
 #app>*,#app section,#app article,#app aside{min-width:0}
 #app p,#app h1,#app h2,#app h3,#app b,#app span{overflow-wrap:anywhere}
@@ -79,4 +79,108 @@ table{width:100%;border-collapse:collapse}
 @media print{
   #app{overflow:visible!important;padding:0!important}
   nav,header,button,#toast{display:none!important}
+}
+
+
+/* Lulu hero: independent, fluid columns that never overlap */
+.lulu-hero{isolation:isolate;min-width:0}
+.lulu-hero-inner{width:100%;min-width:0}
+.lulu-hero-layout{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));
+  align-items:end;
+  gap:clamp(16px,2.2vw,28px);
+  min-width:0;
+}
+.lulu-hero-heading{
+  min-width:0;
+  max-width:17ch;
+  margin:0;
+  color:#c9f3e5;
+  font-size:clamp(1.9rem,3.45vw,2.8rem);
+  font-weight:800;
+  line-height:1.1;
+  letter-spacing:-.045em;
+  overflow-wrap:normal;
+  word-break:normal;
+  text-wrap:balance;
+}
+.lulu-hero-copy{
+  min-width:0;
+  max-width:58ch;
+  align-self:end;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:18px;
+  background:rgba(255,255,255,.055);
+  padding:clamp(14px,2vw,20px);
+}
+.lulu-hero-copy p{
+  margin:0;
+  color:rgba(255,255,255,.86);
+  font-size:clamp(.88rem,1.2vw,1rem);
+  line-height:1.75;
+  overflow-wrap:break-word;
+}
+.lulu-hero-copy .lulu-hero-eyebrow{
+  margin-top:12px;
+  color:#b9eada;
+  font-size:10px;
+  font-weight:800;
+  line-height:1.5;
+  letter-spacing:.11em;
+}
+.lulu-hero-stats{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));
+  gap:12px;
+  width:100%;
+  min-width:0;
+}
+.lulu-hero-stat{
+  min-width:0;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:17px;
+  background:rgba(255,255,255,.10);
+  padding:13px 15px;
+}
+.lulu-hero-stat-label{
+  color:rgba(255,255,255,.67);
+  font-size:10px;
+  font-weight:800;
+  line-height:1.45;
+  letter-spacing:.09em;
+  overflow-wrap:normal;
+}
+.lulu-hero-stat-value{
+  margin-top:5px;
+  color:#d5f8eb;
+  font-size:clamp(1.55rem,2.2vw,2rem);
+  font-weight:800;
+  line-height:1.15;
+  overflow-wrap:anywhere;
+}
+.lulu-hero-stat-note{
+  margin-top:3px;
+  color:rgba(255,255,255,.68);
+  font-size:10px;
+  line-height:1.4;
+  overflow-wrap:break-word;
+}
+@media(max-width:520px){
+  .lulu-hero{border-radius:22px;padding:17px}
+  .lulu-hero-layout{grid-template-columns:minmax(0,1fr);gap:13px}
+  .lulu-hero-heading{max-width:14ch;font-size:clamp(1.85rem,8vw,2.35rem)}
+  .lulu-hero-copy{padding:13px}
+  .lulu-hero-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .lulu-hero-stat{padding:11px}
+  .lulu-hero-stat-label{font-size:9px;letter-spacing:.04em}
+  .lulu-hero-stat-value{font-size:1.55rem}
+}
+@media(min-width:521px) and (max-width:900px){
+  .lulu-hero-layout{grid-template-columns:minmax(0,1fr)}
+  .lulu-hero-heading{max-width:19ch}
+  .lulu-hero-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(prefers-reduced-motion:reduce){
+  .lulu-hero *{scroll-behavior:auto}
 }
