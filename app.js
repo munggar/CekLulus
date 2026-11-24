@@ -155,11 +155,10 @@ function assignKhsSemesters(groups,fallbackSemester,explicitSemester=false){
   }));
   if(unresolved.length){
     const fallback=Number(fallbackSemester)||normalized[0].n;
-    inferred.push({
-      n:fallback,
-      semesterSource:'manual-review',
-      c:unresolved.map(course=>tagCourseWithCurriculum(course,fallback))
-    });
+    const target=inferred.find(group=>Number(group.n)===fallback);
+    const needsReview=unresolved.map(course=>tagCourseWithCurriculum(course,fallback));
+    if(target){target.c.push(...needsReview);target.semesterSource='manual-review';}
+    else inferred.push({n:fallback,semesterSource:'manual-review',c:needsReview});
   }
   return inferred;
 }
@@ -171,7 +170,9 @@ function academicTermForSemester(semester,angkatan){
 }
 function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   if(!CURRICULUM.length)return null;
-  const courses=history.flatMap(group=>(group.c||[]).map(course=>({...course,semester:Number(group.n)||0})));
+  const orderedHistory=[...history].sort((x,y)=>Number(x.n)-Number(y.n));
+  const currentSemester=orderedHistory.reduce((max,item)=>Math.max(max,Number(item.n)||0),0);
+  const courses=orderedHistory.flatMap(group=>(group.c||[]).map(course=>({...course,semester:Number(group.n)||0})));
   const bestByKey=new Map();
   for(const course of courses){
     const candidates=curriculumMatches(course);
@@ -192,7 +193,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   }).map(item=>{
     const record=bestByKey.get(String(item.code||normalizeCourseKey(item.name)));
     return{...item,status:record?'Perlu mengulang':'Belum diambil',grade:record?.g||null,
-      suggestedSemester:Math.max(Number(item.semester)||1,Math.max(1,latestSem()+1))};
+      suggestedSemester:Math.max(Number(item.semester)||1,Math.max(1,currentSemester+1))};
   });
   const atRisk=courses.filter(course=>(G[course.g]??-1)<2).map(course=>({name:course.name,grade:course.g,sks:course.sks,semester:course.semester}));
   const totals=agg(history);
@@ -206,8 +207,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
     if(!prior||(G[course.g]??-1)>(G[prior.g]??-1))creditRecords.set(key,course);
   }
   const completedSks=[...creditRecords.values()].reduce((sum,course)=>sum+Number(course.sks||0),0);
-  const currentSemester=history.reduce((max,item)=>Math.max(max,Number(item.n)||0),0);
-  const recent=history.slice(-2).map(item=>sem(item).sks).filter(Number.isFinite);
+  const recent=orderedHistory.slice(-2).map(item=>sem(item).sks).filter(Number.isFinite);
   const expectedLoad=recent.length?Math.max(12,Math.min(24,recent.reduce((x,y)=>x+y,0)/recent.length)):20;
   const remainingSks=Math.max(0,CFG.total-completedSks);
   const byCredits=currentSemester+Math.ceil(remainingSks/expectedLoad);
