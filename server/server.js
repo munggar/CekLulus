@@ -179,6 +179,107 @@ function summarizeStudent(student) {
   };
 }
 
+function normalizeAcademicKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\\u0300-\\u036f]/g, '')
+    .toLowerCase()
+    .replace(/^[a-z]{0,5}[-.]?\\d{4,}\\s*/, '')
+    .replace(/\\b\\d{5,}\\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\\s+/g, ' ');
+}
+
+function calculateGraduationAnalysis(student, summary) {
+  const semesters = Array.isArray(student?.khs?.semesters) ? student.khs.semesters : [];
+  const curriculum = Array.isArray(student?.curriculum) ? student.curriculum : [];
+  if (!semesters.length || !curriculum.length) return null;
+
+  const gradePoints = { 'A+':4, A:4, 'A-':3.75, 'B+':3.25, B:3, 'B-':2.75, 'C+':2.25, C:2, 'C-':1.75, D:1, E:0 };
+  const ordered = [...semesters].sort((a,b)=>(Number(a.semester)||0)-(Number(b.semester)||0));
+  const currentSemester = ordered.reduce((max,sem)=>Math.max(max,Number(sem.semester)||0),0);
+  const attempts = ordered.flatMap(sem=>(sem.courses||[]).map(course=>({...course,semester:Number(sem.semester)||0})));
+  const bestByKey = new Map();
+
+  for (const course of attempts) {
+    const code = String(course.code||'').trim();
+    const nameKey = normalizeAcademicKey(course.name);
+    const matches = code
+      ? curriculum.filter(item=>String(item.code||'').trim()===code)
+      : curriculum.filter(item=>normalizeAcademicKey(item.name)===nameKey);
+    const key = code || (matches.length ? String(matches[0].code||nameKey) : nameKey);
+    if (!key) continue;
+    const grade = String(course.grade||'').toUpperCase();
+    const score = gradePoints[grade] ?? -1;
+    const prior = bestByKey.get(key);
+    if (!prior || score > (gradePoints[prior.grade] ?? -1)) bestByKey.set(key,{...course,grade});
+  }
+
+  const passed = [...bestByKey.values()].filter(course=>(gradePoints[course.grade]??-1)>=1);
+  const passedSks = passed.reduce((sum,course)=>sum+Number(course.sks||0),0);
+  const required = curriculum.filter(course=>
+    /^wajib\\b/i.test(String(course.notes||'')) ||
+    /^(praktik kerja|skripsi)$/i.test(String(course.name||''))
+  );
+  const missing = required.filter(course=>{
+    const key=String(course.code||normalizeAcademicKey(course.name));
+    const record=bestByKey.get(key);
+    return !record || (gradePoints[record.grade]??-1)<1;
+  }).map(course=>{
+    const record=bestByKey.get(String(course.code||normalizeAcademicKey(course.name)));
+    return {
+      code:course.code,
+      name:course.name,
+      semester:Number(course.semester)||1,
+      sks:Number(course.sks)||0,
+      status:record?'Perlu mengulang':'Belum diambil',
+      suggestedSemester:Math.max(Number(course.semester)||1,currentSemester+1)
+    };
+  });
+  const recentLoads=ordered.slice(-2).map(sem=>(sem.courses||[]).reduce((sum,course)=>sum+Number(course.sks||0),0));
+  const averageLoad=recentLoads.length
+    ? Math.max(12,Math.min(24,recentLoads.reduce((sum,value)=>sum+value,0)/recentLoads.length))
+    : 20;
+  const totalTarget=Number(student.cfg?.total)||144;
+  const remainingSks=Math.max(0,totalTarget-passedSks);
+  const byCredits=currentSemester+Math.ceil(remainingSks/averageLoad);
+  const nextRequired=Math.max(0,...missing.map(course=>course.suggestedSemester));
+  const estimatedSemester=Math.max(currentSemester||1,byCredits,nextRequired);
+  const cohort=Number(student.angkatan)||null;
+  const startYear=cohort?cohort+Math.floor((estimatedSemester-1)/2):null;
+  const estimatedTerm=startYear
+    ? `Semester ${estimatedSemester} · ${estimatedSemester%2?'Ganjil':'Genap'} ${startYear}/${startYear+1}`
+    : null;
+  const dCount=passed.filter(course=>course.grade==='D').length;
+  const practiceCourse=curriculum.find(course=>/^praktik kerja$/i.test(String(course.name||'')));
+  const practiceRecord=practiceCourse?bestByKey.get(String(practiceCourse.code||normalizeAcademicKey(practiceCourse.name))):null;
+  const thesisConditions={
+    sks75:passedSks>=Math.ceil(totalTarget*.75),
+    ipk:Number(summary.ipk||0)>=2.75,
+    maximumD:dCount<=1,
+    practice:passedSks>100 && !!practiceRecord && (gradePoints[practiceRecord.grade]??-1)>=1
+  };
+
+  return {
+    passedSks,
+    attemptedSks:Number(summary.totalSks)||0,
+    remainingSks,
+    averageLoad,
+    currentSemester,
+    estimatedSemester,
+    estimatedTerm,
+    angkatan:cohort,
+    completedRequired:required.length-missing.length,
+    requiredCount:required.length,
+    missing,
+    risky:attempts.filter(course=>(gradePoints[String(course.grade||'').toUpperCase()]??-1)<2).map(course=>({name:course.name,grade:course.grade,semester:course.semester,sks:course.sks})),
+    thesisConditions,
+    thesisStatus:Object.values(thesisConditions).every(Boolean)?'Syarat terukur terpenuhi; ujian proposal tetap perlu diverifikasi':'Masih ada syarat terukur yang perlu dipenuhi',
+    proposalExam:'Perlu verifikasi admin/program studi; tidak dapat disimpulkan dari KHS'
+  };
+}
+
 function fallbackLocalAssistant(message, student) {
   const msg = String(message || '').toLowerCase();
   const summary = summarizeStudent(student);
@@ -749,6 +850,7 @@ app.post('/api/ai/chat', authRequired, async (req, res) => {
       curriculum: Array.isArray(curriculum.courses) ? curriculum.courses : []
     };
     const summary = summarizeStudent(student);
+    const graduationAnalysis = calculateGraduationAnalysis(student, summary);
     const prompt = `Data akademik dari akun yang sedang masuk (bersumber dari database server):
 ${JSON.stringify({
       name: student.name,
@@ -758,10 +860,25 @@ ${JSON.stringify({
       cfg: student.cfg,
       khs: student.khs,
       curriculum: student.curriculum,
-      summary
+      summary,
+      graduationAnalysis
     }, null, 2)}
 
 Pertanyaan: ${message}`;
+    const historyMessages = (Array.isArray(state.chat) ? state.chat.slice(-11, -1) : [])
+      .map(turn => ({
+        role: turn.r === 'u' ? 'user' : 'assistant',
+        content: String(turn.h || '')
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/&amp;/gi, '&')
+          .replace(/&lt;/gi, '<')
+          .replace(/&gt;/gi, '>')
+          .replace(/\\s+/g, ' ')
+          .trim()
+          .slice(0, 1800)
+      }))
+      .filter(turn => turn.content);
 
     const primaryModel = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
     const fallbackModel = process.env.GROQ_FALLBACK_MODEL || 'qwen/qwen3.8-27b';
@@ -775,7 +892,8 @@ Pertanyaan: ${message}`;
           temperature: 0.2,
           max_tokens: 300,
           messages: [
-            { role: 'system', content: 'Kamu Lulu, penasihat akademik personal CekLulus. Jawab dalam Bahasa Indonesia dengan ramah, jelas, terstruktur, dan praktis. Gunakan data KHS, hasil pencocokan kurikulum Excel, ringkasan progres, angkatan, dan prasyarat yang disertakan pada konteks mahasiswa. Bila ditanya kapan lulus, berikan estimasi semester dan tahun akademik hanya bila angkatan tersedia; jelaskan asumsi beban SKS dan mata kuliah wajib yang belum tuntas. Jangan menyebut estimasi sebagai keputusan resmi. Bila prasyarat pada Excel tidak dapat dicocokkan atau ada kode/nama duplikat, nyatakan keterbatasan itu dan jangan menebak. Bedakan data yang benar-benar tercatat dengan rekomendasi. Jangan mengarang kebijakan kampus, dosen, jadwal, nilai, atau kelulusan. Bila data penting tidak tersedia, katakan apa yang kurang dan ajukan satu pertanyaan klarifikasi. Jawab inti pertanyaan 1–5 kalimat; gunakan daftar atau langkah bila membantu.' },
+            { role: 'system', content: 'Kamu Lulu, penasihat akademik personal CekLulus. Jawab dalam Bahasa Indonesia dengan ramah, jelas, terstruktur, dan praktis. Gunakan data KHS, hasil pencocokan kurikulum Excel, ringkasan progres, angkatan, analisis kelulusan, dan prasyarat yang disertakan pada konteks mahasiswa. Bila ditanya kapan lulus, gunakan estimasi semester dan tahun akademik dari analisis server hanya bila angkatan tersedia; jelaskan asumsi beban SKS dan mata kuliah wajib yang belum tuntas. Jangan menyebut estimasi sebagai keputusan resmi. Bila prasyarat pada Excel tidak dapat dicocokkan atau ada kode/nama duplikat, nyatakan keterbatasan itu dan jangan menebak. Bedakan data yang benar-benar tercatat dengan rekomendasi. Jangan mengarang kebijakan kampus, dosen, jadwal, nilai, atau kelulusan. Bila data penting tidak tersedia, katakan apa yang kurang dan ajukan satu pertanyaan klarifikasi. Jawab inti pertanyaan 1–5 kalimat; gunakan daftar atau langkah bila membantu.' },
+            ...historyMessages,
             { role: 'user', content: prompt }
           ]
         });
