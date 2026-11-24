@@ -51,6 +51,9 @@ async function main() {
     await page.goto('http://127.0.0.1:4173', { waitUntil: 'domcontentloaded' });
     await page.addScriptTag({ content: xlsxBrowserBundle });
     await page.waitForSelector('#auth input');
+    const cleanDefaults = await page.evaluate(() => ({ semesterRows: seed().sems.length, guestButton: document.body.innerText.includes('Coba tanpa akun') }));
+    assert.equal(cleanDefaults.semesterRows, 0, 'The first-run application state must not contain demo KHS records.');
+    assert.equal(cleanDefaults.guestButton, false, 'The login/register screen must not offer sample guest access.');
 
     await page.evaluate((data) => {
       USER = { id: '2403045007', name: 'Munggar Fajar Muharram', prodi: 'Sistem dan Teknologi Informasi', angkatan: 2023, role: 'student' };
