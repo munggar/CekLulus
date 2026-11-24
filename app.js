@@ -94,14 +94,16 @@ function tagCourseWithCurriculum(course,semester){
   const matches=curriculumMatches(course);
   if(!matches.length)return{...course,curriculumStatus:CURRICULUM.length?'unmatched':'not-configured'};
   const selected=matches.find(item=>Number(item.semester)===Number(semester))||(matches.length===1?matches[0]:null);
+  const selectedSemester=selected?Number(selected.semester):null;
+  const status=!selected?'ambiguous':selectedSemester===Number(semester)?'matched':'semester-mismatch';
   return{
     ...course,
     curriculumCode:selected?.code||course.curriculumCode||'',
-    curriculumSemester:selected?Number(selected.semester):null,
+    curriculumSemester:selectedSemester,
     curriculumCategory:selected?.category||'',
     curriculumPrerequisite:selected?.prerequisite||'',
     curriculumNotes:selected?.notes||'',
-    curriculumStatus:selected?'matched':'ambiguous',
+    curriculumStatus:status,
     curriculumCandidateSemesters:[...new Set(matches.map(item=>Number(item.semester)))]
   };
 }
@@ -141,7 +143,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   const bestByKey=new Map();
   for(const course of courses){
     const candidates=curriculumMatches(course);
-    const key=String(course.curriculumCode||course.code||candidates[0]?.code||normalizeCourseKey(course.name));
+    const key=String(course.curriculumCode||course.code||(candidates.length===1?candidates[0]?.code:normalizeCourseKey(course.name)));
     if(!key)continue;
     const grade=G[course.g]??-1;
     const prior=bestByKey.get(key);
@@ -170,13 +172,14 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   const nextRequired=Math.max(0,...missing.map(item=>item.suggestedSemester));
   const estimatedSemester=Math.max(currentSemester||1,byCredits,nextRequired);
   const cohort=Number(angkatan)||null;
-  const dCount=courses.filter(course=>course.g==='D').length;
-  const practice=bestByKey.get(String(CURRICULUM.find(item=>/^praktik kerja$/i.test(item.name))?.code||''));
+  const dCount=new Set(courses.filter(course=>course.g==='D').map(course=>String(course.curriculumCode||course.code||normalizeCourseKey(course.name)))).size;
+  const practiceCourse=CURRICULUM.find(item=>/^praktik kerja$/i.test(item.name));
+  const practice=bestByKey.get(String(practiceCourse?.code||''));
   const thesisConditions={
     sks75:totals.sks>=Math.ceil(CFG.total*.75),
     ipk:totals.ipk>=2.75,
     maximumD:dCount<=1,
-    practice:!!practice&&(G[practice.g]??-1)>=1
+    practice:totals.sks>100&&!!practice&&(G[practice.g]??-1)>=1
   };
   const thesisReady=Object.values(thesisConditions).every(Boolean);
   const unknownPrerequisites=[...new Set(CURRICULUM
