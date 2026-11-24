@@ -740,7 +740,7 @@ function mergeKhsSemesterGroups(...sources){
     .filter(semester=>semester.c.length);
 }
 async function detectKhsFile(file, semesterNumber = 1){
-  if (!file) return {semesters:[]};
+  if (!file) return {semesters:[],explicitSemester:false};
   try {
     if ((file.type || '').startsWith('image/')) {
       if(!window.Tesseract)throw new Error('OCR tidak tersedia untuk membaca gambar.');
@@ -784,12 +784,13 @@ async function detectKhsFile(file, semesterNumber = 1){
       const textResult=parseKhsSemesterText(textPages.join('\n'),semesterNumber);
       const ocrResult=parseKhsSemesterText(ocrPages.join('\n'),semesterNumber);
       let semesters=mergeKhsSemesterGroups(textResult.semesters,ocrResult.semesters);
-      if(!textResult.hasSemesterHeadings&&!ocrResult.hasSemesterHeadings){
+      const detectedSemesterHeading=Boolean(textResult.hasSemesterHeadings||ocrResult.hasSemesterHeadings||hasSemesterHeadings);
+      if(!detectedSemesterHeading){
         semesters=mergeKhsSemesterGroups(semesters,[{n:semesterNumber,c:backendMatches}]);
       }else if(semesters.length===1){
         semesters=mergeKhsSemesterGroups(semesters,[{n:semesters[0].n,c:backendMatches}]);
       }
-      return {semesters,explicitSemester:explicitSemester||hasSemesterHeadings};
+      return {semesters,explicitSemester:detectedSemesterHeading};
     }
     if ((file.type || '').startsWith('text/') || (file.name || '').toLowerCase().endsWith('.txt')) {
       const parsed=parseKhsSemesterText(await file.text(),semesterNumber);
