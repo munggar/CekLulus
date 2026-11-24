@@ -1,0 +1,49 @@
+name: Validate CekLulus
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax-and-curriculum:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check server/server.js
+
+      - name: Validate curriculum reference data
+        run: |
+          node - <<'NODE'
+          const data = require('./server/data/curriculum-sti.json');
+          if (!Array.isArray(data.courses) || data.courses.length !== 84) {
+            throw new Error('Expected 84 curriculum rows from the uploaded workbook.');
+          }
+          for (const course of data.courses) {
+            if (!course.name || !Number.isInteger(course.semester) || !Number.isInteger(course.sks)) {
+              throw new Error('Invalid curriculum row: ' + JSON.stringify(course));
+            }
+          }
+          const duplicates = data.courses.reduce((result, course) => {
+            if (course.code) result[course.code] = (result[course.code] || 0) + 1;
+            return result;
+          }, {});
+          if ((duplicates['03045081'] || 0) !== 2) {
+            throw new Error('Expected source duplicate 03045081 to be preserved and flagged.');
+          }
+          console.log('Validated', data.courses.length, 'curriculum rows across semesters 1–8.');
+          NODE
+
+      - name: Install backend dependencies
+        run: npm ci --prefix server
