@@ -674,7 +674,13 @@ app.get(Object.keys(appFiles), (req, res, next) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'ceklulus-ai-backend' });
+  res.json({
+    ok: true,
+    service: 'ceklulus-ai-backend',
+    persistentDatabaseConfigured: Boolean(process.env.DATABASE_URL) && process.env.USE_PG_MEM === 'false',
+    aiConfigured: Boolean(groq),
+    authConfigured: Boolean(process.env.AUTH_TOKEN_SECRET && process.env.AUTH_TOKEN_SECRET.length >= 32)
+  });
 });
 
 app.post('/api/khs/parse', upload.single('file'), async (req, res) => {
