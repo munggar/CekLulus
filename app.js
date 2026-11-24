@@ -130,10 +130,10 @@ function assignKhsSemesters(groups,fallbackSemester,explicitSemester=false){
     if(!matches.length){unresolved.push(course);continue}
     recognized++;
     const preferred=matches.find(item=>Number(item.semester)===Number(fallbackSemester));
+    const allowedSemester=allowedSemesterFromCourse(course,matches,fallbackSemester);
     let selected=preferred;
-    if(!selected){
-      const allowedSemester=allowedSemesterFromCourse(course,matches,fallbackSemester);
-      if(allowedSemester)selected=matches.find(item=>Number(item.semester)===allowedSemester)||matches[0]||null;
+    if(!selected&&allowedSemester){
+      selected=matches.find(item=>Number(item.semester)===allowedSemester)||matches[0]||null;
     }
     if(!selected&&matches.length===1)selected=matches[0];
     if(!selected){unresolved.push({...course,curriculumStatus:'ambiguous'});continue}
