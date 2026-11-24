@@ -209,6 +209,9 @@ async function main() {
       render();
     });
 
+    const hasBrowserXlsx = await page.evaluate(() => !!window.XLSX && typeof window.XLSX.read === 'function');
+    assert.equal(hasBrowserXlsx, true, 'SheetJS must be available in the browser before parsing the workbook.');
+
     const importBook = XLSX.utils.book_new();
     const importRows = [
       ['Program Studi: Sistem dan Teknologi Informasi (S1)'],
@@ -226,13 +229,15 @@ async function main() {
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       buffer: importBuffer
     });
-    await page.waitForFunction(() => Array.isArray(CURRICULUM_DRAFT) && CURRICULUM_DRAFT.length === 3);
+    await page.waitForFunction(() => (document.querySelector('#curriculum-preview')?.innerText || '').trim().length > 0);
     const preview = await page.evaluate(() => ({
       text: document.querySelector('#curriculum-preview')?.innerText || '',
+      draftCount: Array.isArray(CURRICULUM_DRAFT) ? CURRICULUM_DRAFT.length : 0,
       saveDisabled: document.querySelector('#curriculum-import-button')?.disabled,
       scrollWidth: document.documentElement.scrollWidth,
       viewport: window.innerWidth
     }));
+    assert.equal(preview.draftCount, 3, `Excel parser should extract three valid rows. Preview output: ${preview.text}`);
     assert.equal(preview.saveDisabled, false, 'Valid Excel preview should enable the import action.');
     assert.match(preview.text, /3 MATA KULIAH/, 'Excel preview should show all three valid rows.');
     assert.match(preview.text, /03045081/, 'Excel preview should warn about the duplicate source code.');
