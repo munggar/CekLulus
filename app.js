@@ -471,7 +471,7 @@ async function ask(t){
 }
 
 function fallbackReply(t){
- const l=t.toLowerCase(),a=agg(),n=latestSem(),ips=latestIps(),r=risky(),A=asd(),m=l.match(/(\d+)\s*sks/),rem=Math.max(0,CFG.total-a.sks);
+ const l=t.toLowerCase(),a=agg(),n=latestSem(),ips=latestIps(),r=risky(),A=asd(),academic=curriculumAnalysis(semesters(),USER?.angkatan),m=l.match(/(\d+)\s*sks/),rem=academic?.remainingSks??Math.max(0,CFG.total-a.sks);
  if(/ulang|simulasi|kalau|jika/.test(l)&&m){const k=Math.min(30,+m[1]),ret=/ulang|algoritma/.test(l)&&A,gain=ret?A.sks*(3.25-G[A.g]):0,P=project(k,3.5,false,gain,ret?A.sks:0);
   return`<span class="text-[11px] font-bold bg-sec rounded px-2 py-1">SIMULASI KHS PREDIKTIF</span> <small>• Akurasi ${P.acc}%</small><p class="mt-3">Bisa, ${NAME}! 🎯 Skenario ${k} SKS${ret?' + mengulang '+A.name:''} dengan target IPS 3,50:</p>
   <div class="grid grid-cols-2 gap-2 my-3"><div class="bg-sc rounded-xl p-3"><div class="text-[10px] font-bold text-ov">PREDIKSI IPK</div><div class="text-3xl font-extrabold">${f(P.ipk)}</div></div><div class="bg-sc rounded-xl p-3"><div class="text-[10px] font-bold text-ov">LOMPATAN NILAI</div><div class="text-3xl font-extrabold text-se">+${f(P.delta)}</div><small>${ret?A.g+' → B+':'dibanding sekarang'}</small></div></div>
@@ -480,10 +480,27 @@ function fallbackReply(t){
   <div class="mt-3 text-[11px] font-bold text-ov">AKSI CEPAT</div><div class="flex flex-wrap gap-2 mt-1"><button onclick="ask('Cek syarat skripsi')" class="bg-sec rounded-full px-3 py-1.5 text-xs font-semibold">Cek Syarat Skripsi</button><button onclick="ask('Hitung beban maksimal SKS')" class="bg-sec rounded-full px-3 py-1.5 text-xs font-semibold">Hitung Beban Maksimal</button></div>`}
  if(/sisa sks|sks sisa|berapa sks/.test(l))return`Kamu sudah menyelesaikan <b>${a.sks} SKS</b> dari ${CFG.total}. Sisa <b>${rem} SKS</b> — kira-kira ${Math.ceil(rem/cap(ips))} semester lagi dengan beban maksimal ${cap(ips)} SKS.`;
  if(/perbaiki|nilai d|remedial/.test(l))return r.length?`Mata kuliah yang paling berdampak:<ul class="list-disc ml-5 my-2">${r.map(c=>`<li><b>${c.name}</b> (${c.g}, ${c.sks} SKS, Sem ${c.n}) → B+ menaikkan IPK sekitar <b>+${f((3.25-G[c.g])*c.sks/a.sks)}</b></li>`).join('')}</ul>Ambil di semester reguler berikutnya atau SP, dan cek kebijakan nilai mengulang kampusmu.`:'Tidak ada nilai di bawah C. Kamu aman! 🎉';
- if(/skripsi|syarat|prasyarat/.test(l)){const ok=a.sks>=110&&!(A&&G[A.g]<2);return`Cek syarat skripsi: SKS ≥ 110 ${a.sks>=110?'✅':'❌'} (${a.sks}); IPK ≥ ${CFG.minIpk} ${a.ipk>=CFG.minIpk?'✅':'❌'}; tanpa nilai D pada mata kuliah prasyarat ${A&&G[A.g]<2?'❌ ('+A.name+')':'✅'}. ${ok?'Kamu memenuhi syarat.':'Perbaiki dulu nilai prasyarat tersebut.'} <i class="text-xs">(Aturan kelulusan ditetapkan Admin.)</i>`}
+ if(/skripsi|syarat|prasyarat/.test(l)){
+  if(academic){
+    const c=academic.thesisConditions;
+    return `Pemeriksaan awal prasyarat skripsi dari kurikulum Excel:
+    <div class="my-3 space-y-2">
+     <div class="flex justify-between rounded-lg bg-sc p-2"><span>Minimal 75% SKS (${Math.ceil(CFG.total*.75)} SKS)</span><b>${c.sks75?'✅':'❌'}</b></div>
+     <div class="flex justify-between rounded-lg bg-sc p-2"><span>IPK minimal 2,75 (sekarang ${f(academic.ipk)})</span><b>${c.ipk?'✅':'❌'}</b></div>
+     <div class="flex justify-between rounded-lg bg-sc p-2"><span>Nilai D maksimal 1 mata kuliah</span><b>${c.maximumD?'✅':'❌'}</b></div>
+     <div class="flex justify-between rounded-lg bg-sc p-2"><span>Praktik Kerja dan syarat >100 SKS</span><b>${c.practice?'✅':'❌'}</b></div>
+    </div>
+    ${Object.values(c).every(Boolean)?'Syarat terukur pada data KHS terlihat terpenuhi.':'Masih ada syarat terukur yang belum terpenuhi.'} Kelulusan tetap memerlukan verifikasi ujian proposal dan persetujuan kampus.`;
+  }
+  const ok=a.sks>=Math.ceil(CFG.total*.75)&&a.ipk>=2.75&&!(A&&G[A.g]<2);
+  return `Kurikulum acuan belum tersedia. Saya hanya dapat memberi pemeriksaan sementara dari data umum: ${a.sks} SKS dan IPK ${f(a.ipk)}. Minta admin mengimpor kurikulum dan konfirmasi syarat skripsi ke program studi.`;
+ }
  if(/maksimal|beban/.test(l)){return`Dengan IPS terakhir <b>${f(ips)}</b>, beban maksimal semester depan adalah <b>${cap(ips)} SKS</b> (≥3,00 → 24; 2,50–2,99 → 21; lainnya 18).`}
  if(/dosen/.test(l))return'Saya belum punya data dosen di kampusmu. Coba tanya DPA, atau lihat dosen yang sesuai peminatan topik skripsi. Saya bisa bantu menentukan topik dari nilai-nilai terkuatmu.';
- if(/ipk|peluang|lulus|prediksi/.test(l)){const P=project(20,3.5,false);return`IPK-mu <b>${f(a.ipk)}</b> (${pred(a.ipk)}). Dengan 20 SKS & IPS 3,50 di semester depan, proyeksi IPK akhir <b>${f(P.ipk)}</b>, lulus <b>${P.when}</b>. Peluang tepat waktu <b class="text-se">${P.pOn}%</b>, batas maksimal ${P.pMax}%.`}
+ if(/ipk|peluang|lulus|prediksi/.test(l)){
+  const P=project(20,3.5,false);
+  return `IPK saat ini <b>${f(a.ipk)}</b> (${pred(a.ipk)}). ${academic?`Dari kurikulum dan KHS, estimasi penyelesaian sekitar <b>${academic.estimatedTerm||'Semester '+academic.estimatedSemester}</b>, dengan ${academic.remainingSks} SKS lulus masih perlu dipenuhi dan ${academic.missing.length} mata kuliah wajib belum tuntas.`:`Dengan skenario 20 SKS dan IPS 3,50 di semester depan, IPK simulasi menjadi <b>${f(P.ipk)}</b> dan prediksi waktu skenario ${P.when}.`} Tahun akademik hanya dapat dihitung bila tahun angkatan terisi.`;
+ }
  return'Saya bisa bantu: <i>sisa SKS, tips perbaiki nilai D, cek syarat skripsi, beban maksimal SKS, atau simulasi</i> (contoh: “kalau semester depan aku ambil 22 SKS dan ngulang Algoritma, IPK jadi berapa?”).'
 }
 function vRiwayat(){
