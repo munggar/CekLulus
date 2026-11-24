@@ -6,3 +6,13 @@ input[type=range]{accent-color:#002820;width:100%}
 .bar{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 4px)}
 .blob{position:absolute;border-radius:9999px;filter:blur(60px);pointer-events:none}
 @media print{nav,header,button,#toast{display:none!important}}
+
+
+/* Lulu AI-first workspace */
+.typing-dots{display:inline-block;letter-spacing:2px;animation:luluTyping 1.15s infinite ease-in-out}
+@keyframes luluTyping{0%,60%,100%{opacity:.28;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
+#msgs{scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#c6d7ce transparent}
+#msgs::-webkit-scrollbar{width:6px}
+#msgs::-webkit-scrollbar-thumb{background:#c6d7ce;border-radius:999px}
+@media(min-width:1024px){#app{padding-bottom:7rem}}
+@media(max-width:640px){#nav button{font-size:9px;padding-left:5px;padding-right:5px}}
