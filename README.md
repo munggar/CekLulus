@@ -46,3 +46,19 @@ Paket gratis cocok untuk uji coba atau proyek kecil, bukan layanan produksi deng
 3. Buat akun Render, pilih **New > Blueprint**, lalu hubungkan repository. Render akan membaca `render.yaml` dan meminta nilai untuk `DATABASE_URL`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, dan `GROQ_API_KEY`. Isi langsung di Render; gunakan connection string Neon, nama admin pilihan, password unik minimal 12 karakter, dan API key Groq bila memakai fitur AI. Jangan kirim nilai rahasia melalui chat.
 4. `AUTH_TOKEN_SECRET` dibuat otomatis oleh konfigurasi Render. Setelah layanan berhasil deploy, buka URL `.onrender.com` yang ditampilkan Render dan uji login serta pendaftaran akun.
 5. Tabel database dibuat otomatis saat backend pertama kali berjalan. Database Neon baru masih kosong: akun dan data yang sebelumnya hanya ada di PostgreSQL lokal **tidak** berpindah otomatis. Ekspor dan impor database lama perlu dilakukan secara terpisah sebelum mengandalkan hosting baru.
+
+
+## Alur kurikulum, KHS, dan prediksi kelulusan
+
+- Data acuan kurikulum STI UHAMKA dari workbook admin tersedia di `server/data/curriculum-sti.json`. Data seed ini berisi 84 baris mata kuliah dari Semester 1–8. Kode ganda dan prasyarat yang tidak dapat dipetakan tetap dipertahankan agar dapat ditinjau, bukan dihapus atau ditebak.
+- Admin dapat masuk ke panel administrator, memilih file `.xlsx` / `.xls`, memeriksa pratinjau dan peringatan, lalu mengonfirmasi impor. Impor kurikulum yang baru menggantikan kurikulum aktif, tetapi tidak menghapus riwayat KHS mahasiswa.
+- Mahasiswa dianjurkan mengisi tahun angkatan pada pendaftaran. Admin juga dapat memperbaiki tahun angkatan akun mahasiswa lama.
+- Saat KHS diunggah, aplikasi mencoba membaca semester yang tercantum pada dokumen. Jika tidak ada, sistem mencocokkan kode/nama mata kuliah dengan kurikulum untuk memperkirakan semester. Baris ambigu, tidak dikenal, atau tidak sesuai semester harus ditinjau sebelum disimpan.
+- Setelah disimpan, CekLulus menampilkan progres mata kuliah wajib, SKS lulus yang dihitung unik, nilai yang perlu ditinjau, perkiraan semester/tahun akademik lulus, dan pemeriksaan awal prasyarat skripsi. Estimasi bukan keputusan kelulusan resmi; ujian proposal dan syarat administratif tetap perlu diverifikasi kampus.
+- Lulu AI menggunakan KHS, angkatan, dan kurikulum dari database untuk menjawab pertanyaan. Percakapan sebelumnya dibawa sebagai konteks. Fitur AI langsung memerlukan `GROQ_API_KEY` pada Environment Render.
+
+## Catatan database dan akun
+
+Hosting menggunakan PostgreSQL di Neon. Pastikan `DATABASE_URL` menunjuk ke database Neon dan `USE_PG_MEM=false` pada Render agar kegagalan koneksi tidak diam-diam berpindah ke penyimpanan sementara. Jangan menaruh connection string, kata sandi admin, atau API key di GitHub.
+
+Database Neon CekLulus dibuat terpisah. Akun/data mahasiswa dari database atau penyimpanan sementara lama tidak otomatis berpindah ke database baru. Pulihkan melalui cadangan yang tersedia atau minta mahasiswa membuat akun kembali dan mengunggah KHS mereka. Jangan menganggap data lama sudah dimigrasikan tanpa proses impor yang diverifikasi.
