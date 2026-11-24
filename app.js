@@ -93,9 +93,12 @@ function curriculumMatches(course){
 function tagCourseWithCurriculum(course,semester){
   const matches=curriculumMatches(course);
   if(!matches.length)return{...course,curriculumStatus:CURRICULUM.length?'unmatched':'not-configured'};
-  const selected=matches.find(item=>Number(item.semester)===Number(semester))||(matches.length===1?matches[0]:null);
+  const selected=matches.find(item=>Number(item.semester)===Number(semester))||
+    matches.find(item=>allowedSemesterFromCourse(course,[item],semester)===Number(semester))||
+    (matches.length===1?matches[0]:null);
   const selectedSemester=selected?Number(selected.semester):null;
-  const status=!selected?'ambiguous':selectedSemester===Number(semester)?'matched':'semester-mismatch';
+  const allowedSemester=selected?allowedSemesterFromCourse(course,[selected],semester):null;
+  const status=!selected?'ambiguous':selectedSemester===Number(semester)||allowedSemester===Number(semester)?'matched':'semester-mismatch';
   return{
     ...course,
     curriculumCode:selected?.code||course.curriculumCode||'',
@@ -128,11 +131,11 @@ function assignKhsSemesters(groups,fallbackSemester,explicitSemester=false){
     recognized++;
     const preferred=matches.find(item=>Number(item.semester)===Number(fallbackSemester));
     let selected=preferred;
-    if(!selected&&matches.length===1)selected=matches[0];
     if(!selected){
       const allowedSemester=allowedSemesterFromCourse(course,matches,fallbackSemester);
-      if(allowedSemester)selected=matches.find(item=>Number(item.semester)===allowedSemester)||null;
+      if(allowedSemester)selected=matches.find(item=>Number(item.semester)===allowedSemester)||matches[0]||null;
     }
+    if(!selected&&matches.length===1)selected=matches[0];
     if(!selected){unresolved.push({...course,curriculumStatus:'ambiguous'});continue}
     const semester=Number(selected.semester)||Number(fallbackSemester);
     if(!buckets.has(semester))buckets.set(semester,[]);
