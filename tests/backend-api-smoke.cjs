@@ -127,8 +127,10 @@ async function main() {
       institution: 'Universitas Muhammadiyah Prof. DR. HAMKA',
       sheet: 'Prasyarat Mata Kuliah',
       courses: [
-        { semester: 3, code: 'DUP001', name: 'Ketrampilan Komunikasi', category: 'Pengayaan', sks: 2, prerequisite: 'Tidak Ada', notes: 'Dapat diambil di semester 3/5/7' },
-        { semester: 5, code: 'DUP001', name: 'Ketrampilan Komunikasi', category: 'Pengayaan', sks: 2, prerequisite: 'Tidak Ada', notes: 'Dapat diambil di semester 3/5/7' }
+        { semester: 3, code: 'MULTI001', name: 'Ketrampilan Komunikasi', category: 'Pengayaan', sks: 2, prerequisite: 'Tidak Ada', notes: 'Dapat diambil mulai Sem 3 / 5' },
+        { semester: 5, code: 'MULTI001', name: 'Ketrampilan Komunikasi', category: 'Pengayaan', sks: 2, prerequisite: 'Tidak Ada', notes: 'Dapat diambil di semester 3/5/7' },
+        { semester: 1, code: 'BAD001', name: 'Matematika A', category: 'Wajib', sks: 2, prerequisite: 'Tidak Ada', notes: 'Wajib Semester 1' },
+        { semester: 2, code: 'BAD001', name: 'Bahasa B', category: 'Wajib', sks: 2, prerequisite: 'Tidak Ada', notes: 'Wajib Semester 2' }
       ]
     };
     const imported = await request('/api/admin/curriculum', {
@@ -137,13 +139,15 @@ async function main() {
       body: importPayload
     });
     assert.equal(imported.status, 200, JSON.stringify(imported.data));
-    assert.equal(imported.data.meta.courseCount, 2);
-    assert.deepEqual(imported.data.meta.duplicateCodes, ['DUP001']);
+    assert.equal(imported.data.meta.courseCount, 4);
+    assert.deepEqual(imported.data.meta.duplicateCodes, ['BAD001']);
+    assert.deepEqual(imported.data.meta.multiSemesterCodes, ['MULTI001']);
 
     const persistedCurriculum = await request('/api/curriculum', { token: studentToken });
     assert.equal(persistedCurriculum.status, 200);
-    assert.equal(persistedCurriculum.data.courses.length, 2);
+    assert.equal(persistedCurriculum.data.courses.length, 4);
     assert.equal(persistedCurriculum.data.meta.sourceFile, 'ci-curriculum.xlsx');
+    assert.deepEqual(persistedCurriculum.data.meta.multiSemesterCodes, ['MULTI001']);
 
     const invalidImport = await request('/api/admin/curriculum', {
       method: 'POST',
