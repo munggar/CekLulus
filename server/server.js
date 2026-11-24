@@ -673,10 +673,10 @@ app.post('/api/admin/curriculum', authRequired, adminRequired, async (req, res, 
   const duplicateCodes = [];
   const multiSemesterCodes = [];
   const normalizeCourseName = value => String(value || '').normalize('NFD')
-    .replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const allowedSemestersFromNotes = notes => {
-    const match = String(notes || '').match(/(?:semester|sem)\\s*(\\d+(?:\\s*(?:\\/|,|dan)\\s*\\d+)*)/i);
-    return match ? [...new Set((match[1].match(/\\d+/g) || []).map(Number).filter(value => value >= 1 && value <= 14))] : [];
+    const match = String(notes || '').match(/(?:semester|sem)\s*(\d+(?:\s*(?:\/|,|dan)\s*\d+)*)/i);
+    return match ? [...new Set((match[1].match(/\d+/g) || []).map(Number).filter(value => value >= 1 && value <= 14))] : [];
   };
   for (const [code, items] of codeGroups) {
     if (items.length < 2) continue;
