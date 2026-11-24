@@ -57,6 +57,7 @@ async function main() {
       CURRICULUM = data.courses;
       CURRICULUM_META = { sourceFile: data.sourceFile, program: data.program, courseCount: data.courses.length };
       st = seed();
+      shell(true);
       st.sems = [
         { n: 1, c: [
           { name: 'Pendidikan Agama', code: '03045108', curriculumCode: '03045108', sks: 2, g: 'A', t: 'W' },
@@ -117,6 +118,7 @@ async function main() {
 
       await page.evaluate(() => {
         USER = { id: 'admin-test', name: 'Admin CekLulus', role: 'admin' };
+        shell(true);
         render();
       });
       await page.waitForTimeout(35);
@@ -126,6 +128,8 @@ async function main() {
 
       await page.evaluate(() => {
         USER = { id: '2403045007', name: 'Munggar Fajar Muharram', prodi: 'Sistem dan Teknologi Informasi', angkatan: 2023, role: 'student' };
+        shell(true);
+        render();
         profile();
       });
       await page.waitForTimeout(20);
