@@ -1106,7 +1106,7 @@ function vAuth(){const reg=mode==='register',inp=(id,ic_,ph,t='text',x='')=>`<la
  ${authErr?`<div class="bg-erc text-ero rounded-xl px-4 py-3 text-sm mt-3">${ic('error')} ${authErr}</div>`:''}
  ${!reg?`<div class="flex justify-between items-center mt-4 text-sm"><label class="flex items-center gap-2"><input id="a_rem" type="checkbox" checked class="w-4 h-4 accent-[#002820]">Ingat sesi di perangkat ini</label><button onclick="forgot()" class="font-semibold text-se">Lupa sandi?</button></div>`:''}
  <button onclick="doAuth()" class="w-full mt-5 bg-p text-white rounded-2xl py-4 font-bold shadow-lg">${reg?'Daftar & Mulai':'Masuk'} ${ic('arrow_forward')}</button>
- ${role==='student'?`<div class="flex items-center gap-3 my-5 text-xs text-ov"><i class="flex-1 h-px bg-ol"></i>ATAU<i class="flex-1 h-px bg-ol"></i></div><button onclick="guest()" class="w-full bg-sc rounded-2xl py-4 font-bold">${ic('no_accounts')} Coba tanpa akun (data contoh)</button>`:''}
+ 
  <p class="text-center text-xs text-ov mt-6">${ic('verified_user').replace('class="ms"','class="ms" style="font-size:16px"')} Data akun dan akademik tersimpan aman di PostgreSQL.</p></div></div>`}
 async function migrateLegacyAccount(id,password){
  let oldUsers=[];
