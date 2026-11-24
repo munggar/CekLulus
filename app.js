@@ -29,7 +29,7 @@ const latestIps=()=>{const s=semesterAt(latestSem());return s?sem(s).ips:3.5};
 const DEFAULT_CFG={total:144,maxSem:14,minIpk:2};
 let CFG={...DEFAULT_CFG};
 const saveCfg=async()=>{const previous={...CFG};try{const data=await api('/api/settings',{method:'PUT',body:{settings:CFG}});CFG=data.settings;return true}catch(error){CFG=previous;console.error('Gagal menyimpan aturan studi.',error);toast('Aturan studi gagal disimpan: '+error.message);render();return false}};
-let tab='ringkasan',filter='all',q='',open=6;
+let tab='chat',filter='all',q='',open=6,AI_PENDING=false;
 // ---------- perhitungan ----------
 const sem=s=>{const k=s.c.reduce((a,c)=>a+c.sks,0),p=s.c.reduce((a,c)=>a+c.sks*G[c.g],0);return{sks:k,pts:p,ips:k?p/k:0}};
 const agg=(arr=st.sems)=>{let k=0,p=0;arr.forEach(s=>{const m=sem(s);k+=m.sks;p+=m.pts});return{sks:k,pts:p,ipk:k?p/k:0}};
@@ -126,11 +126,92 @@ const setS=(k,i,p)=>{st.sim={sks:k,ips:i,sp:p};save();render()};
 function upd(){save();const y=scrollY;render();scrollTo(0,y)}
 async function applyPlan(){const previous=st.plan;st.plan={...st.sim};if(!await save()){st.plan=previous;render();return}toast('Rencana diterapkan ke Ringkasan');go('ringkasan')}
 function vChat(){
- if(!st.chat.length){const a=agg(),P=project(20,3.5,false),n=latestSem(),welcome=n?`Berdasarkan KHS Semester ${n} yang diunggah, IPK kamu sekarang <b>${f(a.ipk)}</b>. Peluang lulus tepat waktu di semester ${P.semLeft} mencapai <b class="text-se">${P.pOn}%</b>.`:'Unggah KHS semester mana pun untuk mulai melihat IPS, IPK, dan prediksi kelulusan.';st.chat=[{r:'b',h:`Halo ${NAME}! 👋 ${welcome}<div class="bg-sc rounded-xl px-3 py-2 my-2 text-xs">${ic('verified')} ${n?'KHS Terverifikasi • '+a.sks+' SKS Diselesaikan':'Belum ada KHS diunggah'}</div>Ada yang ingin kamu diskusikan tentang KRS semester depan atau mata kuliah berisiko?`,t:tm()}]}
- return`<div class="bg-sl rounded-3xl p-4 mt-2 flex items-center gap-3"><div class="w-14 h-14 rounded-full bg-sec grid place-items-center text-2xl">👩‍🏫</div><div class="flex-1"><b class="text-lg">Lulu AI Advisor</b> ${chip('● AKTIF','bg-sec text-se')}<div class="text-xs text-ov">Menganalisis KHS semester ${semesters().map(s=>s.n).join(', ')} milik ${NAME}</div></div></div>
- <div id="msgs" class="mt-4 space-y-4">${st.chat.map(m=>m.r==='u'?`<div class="flex flex-col items-end"><div class="bg-p text-white rounded-2xl rounded-tr-md px-4 py-3 text-sm max-w-[85%]">${m.h}</div><small class="text-[11px] text-ov mt-1">${m.t}</small></div>`:`<div class="flex gap-2"><div class="w-9 h-9 rounded-full bg-sec grid place-items-center shrink-0">${ic('smart_toy')}</div><div class="min-w-0"><div class="bg-white rounded-2xl rounded-tl-md p-4 text-sm shadow-sm">${m.h}</div><small class="text-[11px] text-ov mt-1 block">${m.t}</small></div></div>`).join('')}</div>
- <div class="flex gap-2 overflow-x-auto mt-5 pb-1">${['Berapa SKS sisa?','Tips perbaiki nilai D','Cek syarat skripsi','Hitung beban maksimal SKS','Rekomendasikan dosen pengampu'].map(t=>`<button onclick="ask('${t}')" class="shrink-0 bg-sc rounded-full px-4 py-2 text-sm font-semibold">${t}</button>`).join('')}</div>
- <div class="fixed left-0 right-0 bottom-[76px] px-5 z-30"><div class="max-w-xl mx-auto bg-white rounded-full shadow-lg px-3 py-2 flex items-center gap-2"><button onclick="upModal()" class="w-10 h-10 rounded-full bg-sc grid place-items-center">${ic('upload_file')}</button><input id="ci" onkeydown="if(event.key==='Enter')ask()" placeholder="Ketik pertanyaan akademik ke Lulu..." class="flex-1 outline-none text-sm min-w-0"><button onclick="mic()">${ic('mic')}</button><button onclick="ask()" class="w-11 h-11 rounded-full bg-p text-white grid place-items-center">${ic('send')}</button></div></div><div class="h-16"></div>`}
+ if(!st.chat.length){
+  const a=agg(),P=project(20,3.5,false),n=latestSem();
+  const welcome=n
+   ? `Halo ${NAME}! 👋 Aku Lulu, partner akademikmu. Dari KHS yang sudah kamu masukkan, IPK saat ini ${f(a.ipk)} dengan ${a.sks} SKS terselesaikan. Kita bisa membahas strategi semester berikutnya, mata kuliah yang perlu diperbaiki, sampai estimasi kelulusan.`
+   : `Halo ${NAME}! 👋 Aku Lulu, partner akademikmu di CekLulus. Mulai dengan mengunggah KHS agar aku bisa membantu membaca progres akademik, menghitung IPK, menyusun target SKS, dan membuat rencana kelulusan yang lebih terarah.`;
+  st.chat=[{r:'b',h:`${welcome}<div class="rounded-2xl bg-sc p-3 mt-3 text-xs"><b class="text-p">Yang bisa kita kerjakan bersama</b><div class="grid grid-cols-2 gap-2 mt-2"><span>✦ Analisis KHS & IPK</span><span>✦ Strategi perbaikan nilai</span><span>✦ Simulasi SKS semester depan</span><span>✦ Estimasi waktu kelulusan</span></div></div>`,t:tm()}];
+ }
+ const a=agg(),n=latestSem(),P=project(20,3.5,false),remaining=Math.max(0,CFG.total-a.sks);
+ const messages=st.chat.map(m=>m.r==='u'
+  ? `<div class="flex flex-col items-end"><div class="max-w-[88%] rounded-2xl rounded-tr-md bg-p px-4 py-3 text-sm leading-6 text-white shadow-sm">${m.h}</div><small class="mt-1 pr-1 text-[11px] text-ov">${m.t}</small></div>`
+  : `<div class="flex items-start gap-3"><div class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sec text-p">${ic('auto_awesome')}</div><div class="min-w-0 max-w-[92%]"><div class="rounded-2xl rounded-tl-md border border-ol/50 bg-white p-4 text-sm leading-6 text-[#25332e] shadow-sm">${m.h}</div><small class="mt-1 block pl-1 text-[11px] text-ov">Lulu AI · ${m.t}</small></div></div>`).join('');
+ return `
+ <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+  <section class="min-w-0 space-y-5">
+   <div class="relative overflow-hidden rounded-[28px] bg-[#073d33] p-5 text-white shadow-lg sm:p-7">
+    <div class="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[#b9eada]/10 blur-3xl"></div>
+    <div class="relative">
+     <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold tracking-[.16em] text-[#c9f3e5]"><span class="h-2 w-2 rounded-full bg-[#8de0bd]"></span LULU AI · ASISTEN AKADEMIK</div>
+     <h1 class="mt-4 max-w-2xl text-[29px] font-extrabold leading-tight tracking-tight sm:text-[38px]">Perjalanan menuju kelulusan dimulai dari percakapan.</h1>
+     <p class="mt-3 max-w-2xl text-sm leading-6 text-white/75 sm:text-base">Tanyakan apa pun tentang KHS, IPK, SKS, mata kuliah, dan strategi studimu. Lulu membantu dengan mempertimbangkan data akademik yang tersimpan di akunmu.</p>
+     <div class="mt-5 grid max-w-xl grid-cols-3 gap-2 sm:gap-3">
+      <div class="rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">IPK SAAT INI</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${f(a.ipk)}</div><div class="text-[10px] text-white/60">dari 4,00</div></div>
+      <div class="rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">SKS SELESAI</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${a.sks}</div><div class="text-[10px] text-white/60">dari ${CFG.total} SKS</div></div>
+      <div class="rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">SEMESTER</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${n||'—'}</div><div class="text-[10px] text-white/60">tercatat</div></div>
+     </div>
+    </div>
+   </div>
+
+   <section class="overflow-hidden rounded-[28px] border border-ol/60 bg-white shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ol/50 px-4 py-4 sm:px-6">
+     <div class="flex min-w-0 items-center gap-3">
+      <div class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-sec text-p">${ic('smart_toy')}</div>
+      <div class="min-w-0"><div class="font-extrabold text-p">Ruang konsultasi Lulu</div><div class="mt-0.5 text-xs text-ov">Konteks akademik: ${n?'Semester '+n+' · '+semesters().length+' semester tersimpan':'belum ada KHS tersimpan'}</div></div>
+     </div>
+     <div class="flex items-center gap-2 rounded-full bg-[#e8f7ef] px-3 py-1.5 text-[10px] font-bold text-[#176444]"><span class="h-2 w-2 rounded-full bg-[#21a66b]"></span> SIAP MEMBANTU</div>
+    </div>
+    <div id="msgs" aria-live="polite" class="max-h-[52vh] min-h-[300px] space-y-5 overflow-y-auto bg-[#f8fbf9] p-4 sm:p-6">${messages}
+     ${AI_PENDING?'<div class="flex items-center gap-3"><div class="grid h-9 w-9 place-items-center rounded-xl bg-sec text-p">'+ic('auto_awesome')+'</div><div class="rounded-2xl rounded-tl-md border border-ol/50 bg-white px-4 py-3 text-sm text-ov shadow-sm"><span class="font-semibold text-p">Lulu sedang berpikir</span><span class="typing-dots ml-1">•••</span></div></div>':''}
+    </div>
+    <div class="border-t border-ol/50 bg-white p-4 sm:p-5">
+     <div class="mb-3 flex flex-wrap gap-2">
+      ${['Analisis IPK dan progresku','Bagaimana cara memperbaiki nilai?','Buat rencana SKS semester depan'].map((t,i)=>`<button onclick="ask('${t}')" class="rounded-full border border-ol/70 bg-white px-3 py-2 text-left text-xs font-semibold text-ov transition hover:border-[#8ac9b0] hover:bg-[#eef8f2] hover:text-p">${i===0?'✦ ':i===1?'↗ ':'▦ '}${t}</button>`).join('')}
+     </div>
+     <div class="flex items-end gap-2 rounded-[22px] border border-ol/70 bg-[#f7faf8] p-2 focus-within:border-[#579b7d] focus-within:ring-2 focus-within:ring-[#b9eada]/50">
+      <button onclick="upModal()" title="Unggah KHS" aria-label="Unggah KHS" class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-p shadow-sm hover:bg-sec">${ic('attach_file')}</button>
+      <textarea id="ci" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ask()}" placeholder="Tulis pertanyaan tentang perjalanan akademikmu..." class="max-h-32 min-h-10 flex-1 resize-y bg-transparent px-2 py-2.5 text-sm outline-none placeholder:text-[#87928c]" ${AI_PENDING?'disabled':''}></textarea>
+      <button onclick="mic()" title="Gunakan suara" aria-label="Gunakan suara" class="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-ov hover:bg-white">${ic('mic')}</button>
+      <button onclick="ask()" title="Kirim pesan" aria-label="Kirim pesan" class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-p text-white shadow-sm transition hover:bg-pc disabled:opacity-50" ${AI_PENDING?'disabled':''}>${ic('send')}</button>
+     </div>
+     <p class="mt-2 px-1 text-[10px] leading-4 text-ov">Lulu dapat membuat kesalahan. Gunakan informasi akademik resmi kampus untuk keputusan final. Tekan Enter untuk mengirim, Shift + Enter untuk baris baru.</p>
+    </div>
+   </section>
+  </section>
+
+  <aside class="space-y-4 lg:sticky lg:top-24">
+   <section class="rounded-[24px] border border-ol/60 bg-white p-5 shadow-sm">
+    <div class="flex items-center justify-between gap-2"><h2 class="font-extrabold text-p">Konteks akademikmu</h2><span class="rounded-full bg-sec px-2.5 py-1 text-[10px] font-bold text-se">PERSONAL</span></div>
+    <p class="mt-1 text-xs leading-5 text-ov">Ringkasan yang dapat digunakan Lulu untuk memberi saran lebih relevan.</p>
+    <div class="mt-4 space-y-2">
+     <div class="flex items-center justify-between rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Predikat IPK</span><b class="text-sm text-p">${a.sks?pred(a.ipk):'Belum tersedia'}</b></div>
+     <div class="flex items-center justify-between rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Sisa SKS target</span><b class="text-sm text-p">${remaining} SKS</b></div>
+     <div class="flex items-center justify-between rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Peluang lulus tepat waktu*</span><b class="text-sm text-p">${P.pOn}%</b></div>
+    </div>
+    <p class="mt-3 text-[10px] leading-4 text-ov">*Estimasi simulasi berdasarkan data yang tersedia, bukan keputusan resmi kampus.</p>
+    <button onclick="go('ringkasan')" class="mt-4 w-full rounded-xl border border-ol/70 py-3 text-sm font-bold text-p hover:bg-[#f4f8f5]">${ic('analytics')} Lihat ringkasan lengkap</button>
+   </section>
+
+   <section class="rounded-[24px] bg-[#e7f5ed] p-5">
+    <div class="grid h-11 w-11 place-items-center rounded-2xl bg-white text-p">${ic('upload_file')}</div>
+    <h2 class="mt-3 font-extrabold text-p">Mulai dari data KHS</h2>
+    <p class="mt-1 text-xs leading-5 text-se">Unggah PDF KHS agar Lulu bisa memberi analisis yang sesuai dengan nilai dan mata kuliahmu.</p>
+    <button onclick="upModal()" class="mt-4 w-full rounded-xl bg-p text-sm font-bold text-white py-3 hover:bg-pc">${ic('add')} Unggah KHS</button>
+   </section>
+
+   <section class="rounded-[24px] border border-ol/60 bg-white p-5 shadow-sm">
+    <h2 class="font-extrabold text-p">Akses cepat</h2>
+    <div class="mt-3 space-y-2">
+     <button onclick="go('simulasi')" class="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-[#f4f8f5]"><span class="grid h-9 w-9 place-items-center rounded-xl bg-sec text-p">${ic('calculate')}</span><span><b class="block text-sm text-p">Simulasi kelulusan</b><small class="text-xs text-ov">Coba skenario IPS dan SKS</small></span></button>
+     <button onclick="go('matkul')" class="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-[#f4f8f5]"><span class="grid h-9 w-9 place-items-center rounded-xl bg-sc text-p">${ic('menu_book')}</span><span><b class="block text-sm text-p">Data mata kuliah</b><small class="text-xs text-ov">Cari nilai dan mata kuliah berisiko</small></span></button>
+     <button onclick="go('riwayat')" class="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-[#f4f8f5]"><span class="grid h-9 w-9 place-items-center rounded-xl bg-sc text-p">${ic('history')}</span><span><b class="block text-sm text-p">Riwayat akademik</b><small class="text-xs text-ov">Lihat data KHS tersimpan</small></span></button>
+    </div>
+   </section>
+   <div class="rounded-2xl border border-[#d8e6de] bg-[#f4f8f5] p-4 text-xs leading-5 text-ov"><b class="text-p">Privasi percakapan</b><br>Lulu mengirim pertanyaan dan ringkasan akademik akunmu ke layanan AI untuk menghasilkan jawaban. Jangan masukkan kata sandi atau informasi sensitif.</div>
+  </aside>
+ </div>`;
+}
 const tm=()=>new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}).replace('.',':')+' WIB';
 function mic(){const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R)return toast('Suara tidak didukung browser ini');const r=new R();r.lang='id-ID';r.onresult=e=>{$('#ci').value=e.results[0][0].transcript};r.onerror=()=>toast('Mikrofon tidak bisa diakses');r.start()}
 
@@ -166,18 +247,28 @@ async function getAiAnswer(question){
 }
 
 async function ask(t){
+  if(AI_PENDING)return;
   t=t??$('#ci')?.value;
   if(!t||!t.trim())return;
   const value=t.replace(/</g,'&lt;');
   st.chat.push({r:'u',h:value,t:tm()});
   save();
   tab='chat';
+  AI_PENDING=true;
   render();
-  const answer = await getAiAnswer(t);
-  st.chat.push({r:'b',h:answer,t:tm()});
-  save();
-  render();
-  setTimeout(()=>scrollTo(0,document.body.scrollHeight),50);
+  try{
+    const answer=await getAiAnswer(t);
+    st.chat.push({r:'b',h:answer,t:tm()});
+  }catch(error){
+    console.error('Lulu AI gagal menjawab.',error);
+    st.chat.push({r:'b',h:'Maaf, Lulu belum bisa memproses pertanyaan ini. Silakan coba kembali beberapa saat lagi.',t:tm()});
+  }finally{
+    AI_PENDING=false;
+    save();
+    render();
+    const messages=$('#msgs');
+    if(messages)messages.scrollTop=messages.scrollHeight;
+  }
 }
 
 function fallbackReply(t){
@@ -523,7 +614,7 @@ async function saveKHS(){
   closeM();open=groups.at(-1).n;go('riwayat');toast(`${groups.length} semester KHS disimpan`)
 }
 // ---------- render ----------
-const TABS=[['ringkasan','dashboard','RINGKASAN'],['matkul','menu_book','MATKUL'],['simulasi','calculate','SIMULASI'],['chat','auto_awesome','TANYA AI'],['riwayat','history_edu','RIWAYAT']];
+const TABS=[['chat','auto_awesome','LULU AI'],['ringkasan','dashboard','RINGKASAN'],['matkul','menu_book','MATA KULIAH'],['simulasi','calculate','SIMULASI'],['riwayat','history_edu','RIWAYAT']];
 function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
 let ADMIN_STUDENTS=[];
 function adminStudents(){return ADMIN_STUDENTS.map(u=>({...u,stats:agg(u.data?.sems||[])}))}
@@ -545,9 +636,10 @@ function vAdmin(){const list=adminStudents();return`<p class="mt-3 text-[11px] f
  <div class="grid grid-cols-3 gap-2 mt-4 text-center"><div class="bg-sc rounded-lg p-2"><div class="text-[10px] text-ov">SEMESTER</div><b>${s.data?.sems?.length||0}</b></div><div class="bg-sc rounded-lg p-2"><div class="text-[10px] text-ov">SKS</div><b>${s.stats.sks}</b></div><div class="bg-sc rounded-lg p-2"><div class="text-[10px] text-ov">IPK</div><b>${f(s.stats.ipk)}</b></div></div>
  <button onclick="adminOpenStudent('${adminToken(s.id)}')" class="w-full mt-3 bg-p text-white rounded-xl py-2.5 text-sm font-bold">${ic('visibility')} Lihat detail KHS</button></article>`).join(''):'<p class="bg-white rounded-2xl p-5 text-sm text-ov">Belum ada akun mahasiswa. Mahasiswa dapat membuat akun dari pilihan Mahasiswa pada layar masuk.</p>'}
  <p class="text-center text-xs text-ov mt-5">Data mahasiswa tersimpan di PostgreSQL.</p>`}
-function render(keep){const localFileWarning=location.protocol==='file:'?'<div class="bg-erc text-ero rounded-2xl p-3 mt-3 text-xs"><b>Penyimpanan browser tidak stabil.</b> Jangan buka index.html langsung. Jalankan <code>npm --prefix server start</code>, lalu buka <code>http://localhost:3001</code> dengan browser yang sama setiap kali.</div>':'';if(USER?.role==='admin'){$('#nav').innerHTML='';$('#app').innerHTML=localFileWarning+vAdmin();return}
- $('#nav').innerHTML=TABS.map(t=>`<button onclick="go('${t[0]}')" class="flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-bold ${tab===t[0]?'text-p':'text-ov'}"><span class="ms ${tab===t[0]?'fill':''}">${t[1]}</span>${t[2]}</button>`).join('');
- $('#app').innerHTML=localFileWarning+{ringkasan:vRingkasan,matkul:vMatkul,simulasi:vSimulasi,chat:vChat,riwayat:vRiwayat}[tab]();
+function render(keep){const localFileWarning=location.protocol==='file:'?'<div class="bg-erc text-ero rounded-2xl p-3 mt-3 text-xs"><b>Penyimpanan browser tidak stabil.</b> Jangan buka index.html langsung. Jalankan <code>npm --prefix server start</code>, lalu buka <code>http://localhost:3001</code> dengan browser yang sama setiap kali.</div>':'';if(USER?.role==='admin'){$('#nav').innerHTML='';$('#app').innerHTML=localFileWarning+'<div class="max-w-2xl mx-auto">'+vAdmin()+'</div>';return}
+ $('#nav').innerHTML=TABS.map(t=>`<button onclick="go('${t[0]}')" class="flex min-w-0 flex-col items-center gap-0.5 px-2 py-1.5 text-[10px] font-bold tracking-wide ${tab===t[0]?'text-p':'text-ov'}"><span class="ms ${tab===t[0]?'fill':''}">${t[1]}</span>${t[2]}</button>`).join('');
+ const content={ringkasan:vRingkasan,matkul:vMatkul,simulasi:vSimulasi,chat:vChat,riwayat:vRiwayat}[tab]();
+ $('#app').innerHTML=localFileWarning+(tab==='chat'?content:'<div class="max-w-2xl mx-auto">'+content+'</div>');
  if(keep){const e=$('#q');if(e){e.focus();e.setSelectionRange(q.length,q.length)}}}
 // ---------- autentikasi dan data tersimpan di backend ----------
 let USER=null,NAME='Alya',mode='login',authErr='',role='student';
@@ -597,7 +689,7 @@ function setUser(response,remember=true){
  USER={...response.user,role:response.user.role||'student'};
  st=response.data||{...seed(),sems:[]};
  CFG={...DEFAULT_CFG,...response.settings};
- NAME=first(USER.name);tab='ringkasan';shell(true);
+ NAME=first(USER.name);tab='chat';shell(true);
  $('#av').textContent=NAME[0].toUpperCase();
  if(USER.role==='admin')api('/api/admin/students').then(result=>{ADMIN_STUDENTS=result.students;render()}).catch(error=>{console.error('Gagal memuat daftar mahasiswa.',error);toast('Data mahasiswa gagal dimuat: '+error.message)});
  boot();
