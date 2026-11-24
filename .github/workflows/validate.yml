@@ -48,6 +48,9 @@ jobs:
       - name: Install backend dependencies
         run: npm ci --prefix server
 
+      - name: Test backend API and role permissions
+        run: node tests/backend-api-smoke.cjs
+
       - name: Install Playwright and Chromium
         run: |
           npm install --prefix /tmp/ceklulus-browser-tests playwright xlsx
