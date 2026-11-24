@@ -548,7 +548,7 @@ app.post('/api/auth/login', async (req, res, next) => {
   if (password.length > 128) return res.status(401).json({ error: 'NIM/email atau kata sandi salah.' });
   try {
     const result = await pool.query(
-      'SELECT id, name, prodi, role, guest, password_salt, password_hash FROM users WHERE LOWER(id) = LOWER($1)',
+      'SELECT id, name, prodi, angkatan, role, guest, password_salt, password_hash FROM users WHERE LOWER(id) = LOWER($1)',
       [id]
     );
     const user = result.rows[0];
