@@ -337,18 +337,18 @@ function vChat(){
  return `
  <div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
   <section class="min-w-0 space-y-5">
-   <div class="relative overflow-hidden rounded-[28px] bg-[#073d33] p-5 text-white shadow-lg sm:p-7">
+   <div class="lulu-hero relative overflow-hidden rounded-[28px] bg-[#073d33] p-5 text-white shadow-lg sm:p-7">
     <div class="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[#b9eada]/10 blur-3xl"></div>
-    <div class="relative">
+    <div class="lulu-hero-inner relative">
      <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold tracking-[.16em] text-[#c9f3e5]"><span class="h-2 w-2 rounded-full bg-[#8de0bd]"></span LULU AI · ASISTEN AKADEMIK</div>
-     <div class="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(220px,.9fr)] lg:items-end">
-      <h1 class="min-w-0 break-words text-[clamp(1.8rem,4.2vw,2.65rem)] font-extrabold leading-[1.12] tracking-tight">Perjalanan menuju kelulusan dimulai dari percakapan.</h1>
-      <div class="min-w-0 rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p class="text-sm leading-6 text-white/80 sm:text-base">Tanyakan apa pun tentang KHS, IPK, SKS, mata kuliah, dan strategi studimu. Lulu membantu dengan mempertimbangkan data akademik yang tersimpan di akunmu.</p><p class="mt-3 text-[10px] font-bold tracking-wider text-[#b9eada]">ANALISIS AKADEMIK BERBASIS KHS & KURIKULUM</p></div>
+     <div class="lulu-hero-layout mt-4">
+      <h1 class="lulu-hero-heading">Perjalanan menuju kelulusan dimulai dari percakapan.</h1>
+      <div class="lulu-hero-copy"><p>Tanyakan apa pun tentang KHS, IPK, SKS, mata kuliah, dan strategi studimu. Lulu membantu dengan mempertimbangkan data akademik yang tersimpan di akunmu.</p><p class="lulu-hero-eyebrow">ANALISIS AKADEMIK BERBASIS KHS & KURIKULUM</p></div>
      </div>
-     <div class="mt-5 grid max-w-2xl grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:gap-3">
-      <div class="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">IPK SAAT INI</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${f(a.ipk)}</div><div class="text-[10px] text-white/60">dari 4,00</div></div>
-      <div class="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">SKS SELESAI</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${a.sks}</div><div class="text-[10px] text-white/60">dari ${CFG.total} SKS</div></div>
-      <div class="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">ANGKATAN / SEMESTER</div><div class="mt-1 break-words text-2xl font-extrabold sm:text-3xl">${USER?.angkatan||n||'—'}</div><div class="text-[10px] text-white/60">${USER?.angkatan?'tahun masuk':'semester terakhir tercatat'}</div></div>
+     <div class="lulu-hero-stats mt-5">
+      <div class="lulu-hero-stat"><div class="lulu-hero-stat-label">IPK SAAT INI</div><div class="lulu-hero-stat-value">${f(a.ipk)}</div><div class="lulu-hero-stat-note">dari 4,00</div></div>
+      <div class="lulu-hero-stat"><div class="lulu-hero-stat-label">SKS SELESAI</div><div class="lulu-hero-stat-value">${a.sks}</div><div class="lulu-hero-stat-note">dari ${CFG.total} SKS</div></div>
+      <div class="lulu-hero-stat"><div class="lulu-hero-stat-label">ANGKATAN / SEMESTER</div><div class="lulu-hero-stat-value">${USER?.angkatan||n||'—'}</div><div class="lulu-hero-stat-note">${USER?.angkatan?'tahun masuk':'semester terakhir tercatat'}</div></div>
      </div>
     </div>
    </div>
