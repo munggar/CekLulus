@@ -59,6 +59,9 @@ async function main() {
     const health = await request('/api/health');
     assert.equal(health.status, 200);
     assert.equal(health.data.ok, true);
+    assert.equal(health.data.persistentDatabaseConfigured, false);
+    assert.equal(health.data.aiConfigured, false);
+    assert.equal(health.data.authConfigured, true);
 
     const guestMode = await request('/api/auth/guest', { method: 'POST', body: {} });
     assert.equal(guestMode.status, 410, 'The old demo guest-account flow must stay disabled.');
