@@ -163,7 +163,7 @@ function assignKhsSemesters(groups,fallbackSemester,explicitSemester=false){
   return inferred;
 }
 function academicTermForSemester(semester,angkatan){
-  if(!angkatan||!Number.isFinite(Number(angkatan)))return null;
+  if(!semester||!Number.isFinite(Number(semester))||!angkatan||!Number.isFinite(Number(angkatan)))return null;
   const startYear=Number(angkatan)+Math.floor((Number(semester)-1)/2);
   const term=Number(semester)%2?'Ganjil':'Genap';
   return `Semester ${semester} · ${term} ${startYear}/${startYear+1}`;
@@ -212,7 +212,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   const remainingSks=Math.max(0,CFG.total-completedSks);
   const byCredits=currentSemester+Math.ceil(remainingSks/expectedLoad);
   const nextRequired=Math.max(0,...missing.map(item=>item.suggestedSemester));
-  const estimatedSemester=Math.max(currentSemester||1,byCredits,nextRequired);
+  const estimatedSemester=orderedHistory.length?Math.max(currentSemester||1,byCredits,nextRequired):null;
   const cohort=Number(angkatan)||null;
   const dCount=new Set(courses.filter(course=>course.g==='D').map(course=>String(course.curriculumCode||course.code||normalizeCourseKey(course.name)))).size;
   const practiceCourse=CURRICULUM.find(item=>/^praktik kerja$/i.test(item.name));
@@ -221,7 +221,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
     sks75:completedSks>=Math.ceil(CFG.total*.75),
     ipk:totals.ipk>=2.75,
     maximumD:dCount<=1,
-    practice:totals.sks>100&&!!practice&&(G[practice.g]??-1)>=1
+    practice:completedSks>100&&!!practice&&(G[practice.g]??-1)>=1
   };
   const thesisReady=Object.values(thesisConditions).every(Boolean);
   const unknownPrerequisites=[...new Set(CURRICULUM
@@ -382,7 +382,7 @@ function vChat(){
     <div class="mt-4 space-y-2">
      <div class="flex items-center justify-between rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Predikat IPK</span><b class="text-sm text-p">${a.sks?pred(a.ipk):'Belum tersedia'}</b></div>
      <div class="flex items-center justify-between gap-3 rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Sisa SKS target</span><b class="shrink-0 text-sm text-p">${remaining} SKS</b></div>
-     <div class="flex items-center justify-between gap-3 rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Estimasi semester lulus</span><b class="shrink-0 text-right text-sm text-p">${academic?(academic.estimatedTerm||'Semester '+academic.estimatedSemester):'Menunggu kurikulum'}</b></div>
+     <div class="flex items-center justify-between gap-3 rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Estimasi semester lulus</span><b class="shrink-0 text-right text-sm text-p">${academic?(academic.estimatedTerm|| (academic.estimatedSemester?'Semester '+academic.estimatedSemester:'Menunggu KHS')):'Menunggu kurikulum'}</b></div>
      <div class="flex items-center justify-between gap-3 rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Mata kuliah wajib tuntas</span><b class="shrink-0 text-sm text-p">${academic?academic.completedRequired+'/'+academic.requiredCount:'—'}</b></div>
     </div>
     <p class="mt-3 text-[10px] leading-4 text-ov">${academic?'Estimasi dihitung dari kurikulum aktif, SKS, mata kuliah wajib yang belum tuntas, dan angkatan bila tersedia.':'Admin perlu mengimpor kurikulum Excel untuk mengaktifkan estimasi kelulusan berdasarkan daftar mata kuliah wajib.'} Estimasi bukan keputusan resmi kampus.</p>
@@ -1085,7 +1085,7 @@ function vAdmin(){
     const latest=history.reduce((max,item)=>Math.max(max,Number(item.n)||0),0);
     return `<article class="mb-3 rounded-2xl border border-ol/60 bg-white p-4 shadow-sm sm:p-5">
      <div class="flex flex-wrap items-start justify-between gap-3"><div class="min-w-0"><b class="block break-words text-base text-p">${escapeHTML(student.name)}</b><div class="mt-1 break-all text-xs text-ov">${escapeHTML(student.id)}${student.prodi?' · '+escapeHTML(student.prodi):''}</div></div><span class="rounded-full ${history.length?'bg-sec text-se':'bg-sc text-ov'} px-2.5 py-1 text-[10px] font-bold">${history.length?'KHS tersimpan':'Belum ada KHS'}</span></div>
-     <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">SEMESTER AKTIF</div><b class="text-xl text-p">${latest||'—'}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">TOTAL SKS</div><b class="text-xl text-p">${stats.sks}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">IPK</div><b class="text-xl text-p">${f(stats.ipk)}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">ESTIMASI LULUS</div><b class="text-base text-p">${analysis?(analysis.estimatedTerm||'Semester '+analysis.estimatedSemester):'Impor kurikulum'}</b></div></div>
+     <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">SEMESTER AKTIF</div><b class="text-xl text-p">${latest||'—'}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">TOTAL SKS</div><b class="text-xl text-p">${stats.sks}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">IPK</div><b class="text-xl text-p">${f(stats.ipk)}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">ESTIMASI LULUS</div><b class="text-base text-p">${analysis?(analysis.estimatedTerm||(analysis.estimatedSemester?'Semester '+analysis.estimatedSemester:'Menunggu KHS')):'Impor kurikulum'}</b></div></div>
      <div class="mt-3 rounded-xl border border-ol/60 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><b class="text-xs text-p">Tahun angkatan</b><span class="text-[10px] text-ov">${student.angkatan?'Dasar estimasi tahun kalender':'Belum diisi'}</span></div><div class="mt-2 flex flex-wrap gap-2"><input id="cohort_${token}" type="number" min="2000" max="${new Date().getFullYear()}" value="${student.angkatan||''}" placeholder="Contoh: 2023" class="min-w-0 flex-1 rounded-lg border border-ol bg-white px-3 py-2 text-sm"><button onclick="saveStudentCohort('${token}')" class="rounded-lg bg-sc px-4 py-2 text-xs font-bold text-p">Simpan angkatan</button></div></div>
      ${analysis?`<div class="mt-3 flex flex-wrap items-center gap-2 text-xs"><span class="rounded-full bg-sec px-2.5 py-1 font-bold text-se">Kurikulum: ${analysis.completedRequired}/${analysis.requiredCount} wajib terpenuhi</span><span class="rounded-full ${analysis.missing.length?'bg-[#fff7e6] text-[#875b16]':'bg-sec text-se'} px-2.5 py-1 font-bold">${analysis.missing.length} wajib belum tuntas</span><span class="rounded-full ${analysis.atRisk.length?'bg-erc text-ero':'bg-sc text-ov'} px-2.5 py-1 font-bold">${analysis.atRisk.length} nilai berisiko</span></div>`:''}
      <button onclick="adminOpenStudent('${token}')" class="mt-3 w-full rounded-xl bg-p text-sm font-bold text-white py-3">${ic('analytics')} Buka analisis akademik lengkap</button>
