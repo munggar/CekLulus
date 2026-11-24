@@ -83,6 +83,19 @@ async function main() {
       render();
     }, curriculum);
 
+    const graduationCheck = await page.evaluate(() => curriculumAnalysis([
+      { n: 1, c: [
+        { name: 'Ketrampilan Komunikasi', code: '03045081', curriculumCode: '03045081', sks: 2, g: 'D', t: 'P' }
+      ] },
+      { n: 2, c: [
+        { name: 'Ketrampilan Komunikasi', code: '03045081', curriculumCode: '03045081', sks: 2, g: 'B', t: 'P' },
+        { name: 'Pendidikan Agama', code: '03045108', curriculumCode: '03045108', sks: 2, g: 'A', t: 'W' }
+      ] }
+    ], 2023));
+    assert.equal(graduationCheck.totalSks, 4, 'A retaken course must contribute credits only once to the graduation estimate.');
+    assert.equal(graduationCheck.thesisConditions.maximumD, true, 'A retaken D improved to B should not remain an outstanding D for thesis checks.');
+    assert.ok(graduationCheck.estimatedTerm, 'An existing KHS and cohort should produce an estimated academic completion term.');
+
     const widths = [320, 360, 375, 414, 768, 1024, 1280, 1440, 1920];
     const tabs = ['chat', 'ringkasan', 'matkul', 'simulasi', 'riwayat'];
     const results = [];
