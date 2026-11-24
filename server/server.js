@@ -563,6 +563,76 @@ app.post('/api/auth/login', async (req, res, next) => {
 app.post('/api/auth/guest', (req, res) => {
   return res.status(410).json({ error: 'Mode tamu dengan data contoh sudah dinonaktifkan. Silakan daftar atau masuk dengan akun terdaftar.' });
 });
+app.get('/api/auth/me', authRequired, async (req, res, next) => {
+  try {
+    return res.json(await authResponse(req.user));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/data', authRequired, async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT state FROM student_data WHERE user_id = $1', [req.user.id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Data mahasiswa tidak ditemukan.' });
+    return res.json({ data: result.rows[0].state });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.put('/api/data', authRequired, async (req, res, next) => {
+  if (req.user.role !== 'student') return res.status(403).json({ error: 'Data akademik hanya dapat diubah oleh mahasiswa.' });
+  const state = req.body?.data;
+  if (!state || typeof state !== 'object' || Array.isArray(state) || !Array.isArray(state.sems)) {
+    return res.status(400).json({ error: 'Format data mahasiswa tidak valid.' });
+  }
+  try {
+    await pool.query(`
+      INSERT INTO student_data (user_id, state, updated_at) VALUES ($1, $2::jsonb, NOW())
+      ON CONFLICT (user_id) DO UPDATE SET state = EXCLUDED.state, updated_at = NOW()
+    `, [req.user.id, JSON.stringify(state)]);
+    return res.json({ ok: true });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/settings', authRequired, async (req, res, next) => {
+  try {
+    const result = await pool.query("SELECT value FROM app_settings WHERE key = 'study_rules'");
+    return res.json({ settings: result.rows[0]?.value || DEFAULT_SETTINGS });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.put('/api/settings', authRequired, adminRequired, async (req, res, next) => {
+  const { total, maxSem, minIpk } = req.body?.settings || {};
+  if (![total, maxSem, minIpk].every(Number.isFinite) || total < 1 || maxSem < 1 || minIpk < 0 || minIpk > 4) {
+    return res.status(400).json({ error: 'Aturan studi tidak valid.' });
+  }
+  try {
+    const settings = { total, maxSem, minIpk };
+    await pool.query(`
+      INSERT INTO app_settings (key, value, updated_at) VALUES ('study_rules', $1::jsonb, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `, [JSON.stringify(settings)]);
+    return res.json({ settings });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/curriculum', authRequired, async (req, res, next) => {
+  try {
+    const result = await pool.query("SELECT value FROM app_settings WHERE key = 'curriculum'");
+    return res.json(result.rows[0]?.value || { meta: null, courses: [] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.post('/api/admin/curriculum', authRequired, adminRequired, async (req, res, next) => {
   const rawCourses = req.body?.courses;
   const sourceFile = String(req.body?.sourceFile || 'Curriculum.xlsx').slice(0, 180);
