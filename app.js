@@ -446,8 +446,8 @@ function prasyarat(){const a=agg(),A=asd(),ch=[['Total SKS ≥ '+CFG.total,a.sks
 function cfgModal(){modal(`<b class="text-xl">Aturan Studi</b><p class="text-xs text-ov mb-3">Aturan ini berlaku untuk seluruh akun mahasiswa.</p>${[['total','Total SKS kelulusan',CFG.total],['maxSem','Batas masa studi (semester)',CFG.maxSem],['minIpk','IPK minimum lulus',CFG.minIpk]].map(x=>`<label class="block text-sm font-semibold mt-3">${x[1]}<input id="c_${x[0]}" type="number" step="any" value="${x[2]}" class="w-full bg-sc rounded-xl px-4 py-3 mt-1 font-normal"></label>`).join('')}
  <button onclick="(async()=>{CFG={total:+c_total.value||144,maxSem:+c_maxSem.value||14,minIpk:+c_minIpk.value||2};if(await saveCfg()){closeM();render();toast('Aturan studi diperbarui')}})()" class="w-full mt-4 bg-p text-white rounded-xl py-3 font-bold">Simpan Aturan</button>
  <button onclick="(async()=>{CFG={...DEFAULT_CFG};if(await saveCfg()){closeM();render();toast('Aturan default dipulihkan')}})()" class="w-full mt-2 bg-sc rounded-xl py-3 font-bold">Pulihkan Aturan Default</button>`)}
-let draft=[],draftSemesters=null,draftFileName='';
-function upModal(no){const n=no||latestSem()+1,ex=semesterAt(n);draft=ex?ex.c.map(c=>({...c})):[];draftSemesters=null;draftFileName='';drawUp(n)}
+let draft=[],draftSemesters=null,draftFileName='',draftSemesterSource='manual',draftExplicitSemester=false;
+function upModal(no){const n=no||latestSem()+1,ex=semesterAt(n);draft=ex?ex.c.map(c=>({...c})):[];draftSemesters=null;draftFileName='';draftSemesterSource='manual';draftExplicitSemester=false;drawUp(n)}
 function drawUp(n){
   const multi=draftSemesters?.length>1;
   const groups=multi?draftSemesters:[];
@@ -580,7 +580,7 @@ async function extractKhsTableRows(page){
     const cleanName=normalizeKhsName(name);
     const sks=Number(sksItem?.text),g=normalizeGradeToken(gradeItem?.text);
     if(!serial||!code||!cleanName||!Number.isInteger(sks)||sks<1||sks>10||!g)continue;
-    found.push({name:cleanName,sks,g,t:'W'});
+    found.push({name:cleanName,code:code.text,curriculumCode:code.text,sks,g,t:'W'});
   }
   return mergeKhsDetections(found);
 }
@@ -599,8 +599,9 @@ function mergeKhsDetections(...groups){
       const name=normalizeKhsName(item.name).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
       const sks=Number(item.sks),g=normalizeGradeToken(item.g);
       if(!name||!/[a-z]/.test(name)||!Number.isInteger(sks)||sks<1||!g)continue;
-      const key=`${name}-${sks}`;
-      if(!merged.has(key))merged.set(key,{name:String(item.name).trim(),sks,g,t:item.t||'W'});
+      const code=String(item.code||item.curriculumCode||'').trim();
+      const key=code||`${name}-${sks}`;
+      if(!merged.has(key))merged.set(key,{name:String(item.name).trim(),code,curriculumCode:code,sks,g,t:item.t||'W'});
     }
   }
   return [...merged.values()];
