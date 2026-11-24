@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ceklulus-v9';
+const CACHE_NAME = 'ceklulus-v10';
 const APP_SHELL = ['./', './index.html', './style.css', './app.js', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', event => {
