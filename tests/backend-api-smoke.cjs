@@ -60,6 +60,9 @@ async function main() {
     assert.equal(health.status, 200);
     assert.equal(health.data.ok, true);
 
+    const guestMode = await request('/api/auth/guest', { method: 'POST', body: {} });
+    assert.equal(guestMode.status, 410, 'The old demo guest-account flow must stay disabled.');
+
     const deniedCurriculum = await request('/api/curriculum');
     assert.equal(deniedCurriculum.status, 401, 'Curriculum must require an authenticated session.');
 
@@ -87,6 +90,8 @@ async function main() {
     });
     assert.equal(registration.status, 201, JSON.stringify(registration.data));
     assert.equal(registration.data.user.angkatan, 2024);
+    assert.equal(registration.data.data.sems.length, 0, 'New student accounts must not receive sample KHS records.');
+    assert.equal(registration.data.user.guest, false);
     const studentToken = registration.data.token;
 
     const studentLogin = await request('/api/auth/login', {
