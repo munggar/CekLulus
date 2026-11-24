@@ -676,7 +676,8 @@ async function detectKhsFile(file, semesterNumber = 1){
     if ((file.type || '').startsWith('image/')) {
       if(!window.Tesseract)throw new Error('OCR tidak tersedia untuk membaca gambar.');
       const { data } = await window.Tesseract.recognize(file, 'eng+ind', { logger: () => {} });
-      return {semesters:[{n:semesterNumber,c:parseKhsText(data.text,semesterNumber)}]};
+      const parsed=parseKhsSemesterText(data.text,semesterNumber);
+      return {semesters:parsed.semesters.length?parsed.semesters:[{n:semesterNumber,c:parseKhsText(data.text)}],explicitSemester:parsed.hasSemesterHeadings};
     }
     if ((file.type || '').includes('pdf') || (file.name || '').toLowerCase().endsWith('.pdf')) {
       let backendMatches=[];
@@ -697,20 +698,20 @@ async function detectKhsFile(file, semesterNumber = 1){
       const pdf = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
       const structuredSemesters=[];
       const textPages=[],ocrPages=[];
-      let currentSemester=semesterNumber;
+      let currentSemester=semesterNumber,hasSemesterHeadings=false;
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const text=await extractPdfPageText(page);
         textPages.push(text);
         const heading=text.match(/(?:^|\n)\s*(?:KHS\s+)?semester\s*(?:ke[- ]*)?[:#-]?\s*(1[0-4]|[1-9])\b/im);
-        if(heading)currentSemester=Number(heading[1]);
+        if(heading){currentSemester=Number(heading[1]);hasSemesterHeadings=true;}
         const tableRows=await extractKhsTableRows(page);
         if(tableRows.length)structuredSemesters.push({n:currentSemester,c:tableRows});
         if(!tableRows.length&&window.Tesseract){
           ocrPages.push(await ocrPdfPage(page));
         }
       }
-      if(structuredSemesters.length)return{semesters:mergeKhsSemesterGroups(structuredSemesters)};
+      if(structuredSemesters.length)return{semesters:mergeKhsSemesterGroups(structuredSemesters),explicitSemester:hasSemesterHeadings};
       const textResult=parseKhsSemesterText(textPages.join('\n'),semesterNumber);
       const ocrResult=parseKhsSemesterText(ocrPages.join('\n'),semesterNumber);
       let semesters=mergeKhsSemesterGroups(textResult.semesters,ocrResult.semesters);
@@ -719,11 +720,11 @@ async function detectKhsFile(file, semesterNumber = 1){
       }else if(semesters.length===1){
         semesters=mergeKhsSemesterGroups(semesters,[{n:semesters[0].n,c:backendMatches}]);
       }
-      return {semesters};
+      return {semesters,explicitSemester:explicitSemester||hasSemesterHeadings};
     }
     if ((file.type || '').startsWith('text/') || (file.name || '').toLowerCase().endsWith('.txt')) {
-      const text = await file.text();
-      return {semesters:[{n:semesterNumber,c:parseKhsText(text,semesterNumber)}]};
+      const parsed=parseKhsSemesterText(await file.text(),semesterNumber);
+      return {semesters:parsed.semesters.length?parsed.semesters:[{n:semesterNumber,c:[]}],explicitSemester:parsed.hasSemesterHeadings};
     }
   } catch (error) {
     console.error(error);
