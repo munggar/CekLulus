@@ -748,36 +748,67 @@ async function detectTextKHS(){
   drawUp(+($('#u_n')?.value || 1));
   toast('Data KHS berhasil dideteksi otomatis');
 }
-function pv(i){const fl=i.files[0];if(!fl)return;
-  const n=+($('#u_n')?.value||latestSem()+1);
-  if(!(fl.type||'').includes('pdf')&&!fl.name.toLowerCase().endsWith('.pdf')){toast('Pilih file KHS berformat PDF.');return}
-  draftFileName=fl.name;$('#u_f').textContent=fl.name;$('#u_p').innerHTML='<p class="text-xs text-ov mt-2">Membaca semua halaman PDF...</p>';
-  detectKhsFile(fl,n).then(result=>{
-    const groups=result.semesters||[];
-    const count=groups.reduce((total,group)=>total+group.c.length,0);
-    if(!count){$('#u_p').innerHTML='<p class="text-xs text-ero mt-2">Tidak ada baris mata kuliah yang terbaca. Pastikan PDF berisi teks atau scan yang jelas.</p>';toast('Tidak ditemukan data mata kuliah di PDF.');return}
-    draftSemesters=groups;draft=groups.length===1?groups[0].c:[];
-    drawUp(groups.length===1?groups[0].n:n);
-    toast(`${count} mata kuliah terbaca dari ${groups.length} semester`);
+function pv(input){
+  const file=input.files?.[0];if(!file)return;
+  const semester=Number($('#u_n')?.value||latestSem()+1);
+  const isPdf=(file.type||'').includes('pdf')||file.name.toLowerCase().endsWith('.pdf');
+  const isImage=(file.type||'').startsWith('image/');
+  if(!isPdf&&!isImage){toast('Pilih KHS PDF atau gambar JPG/PNG.');return}
+  draftFileName=file.name;
+  const label=$('#u_f');if(label)label.textContent=file.name;
+  const preview=$('#u_p');if(preview)preview.innerHTML='<p class="mt-2 text-xs text-ov">Membaca dokumen, mengidentifikasi semester, lalu mencocokkan mata kuliah dengan kurikulum...</p>';
+  detectKhsFile(file,semester).then(result=>{
+    const count=(result.semesters||[]).reduce((total,group)=>total+(group.c||[]).length,0);
+    if(!count){
+      if(preview)preview.innerHTML='<p class="mt-2 rounded-xl bg-erc p-3 text-xs text-ero">Tidak ditemukan data mata kuliah yang bisa diverifikasi. Pastikan file jelas dan pilih semester secara manual jika dokumen tidak mencantumkan nomor semester.</p>';
+      toast('Tidak ditemukan data mata kuliah di dokumen.');return;
+    }
+    const assigned=assignKhsSemesters(result.semesters,semester,Boolean(result.explicitSemester));
+    const inferred=assigned.length===1&&assigned[0].semesterSource==='curriculum-match';
+    draftExplicitSemester=Boolean(result.explicitSemester);
+    draftSemesterSource=inferred?'curriculum-match':result.explicitSemester?'document':'manual-review';
+    draftSemesters=assigned;
+    draft=assigned.length===1?assigned[0].c:[];
+    drawUp(assigned.length===1?assigned[0].n:semester);
+    toast(`${count} mata kuliah dibaca dan ${inferred?'dicocokkan dengan semester kurikulum':'dikelompokkan untuk diverifikasi'}`);
+  }).catch(error=>{
+    console.error('Gagal membaca KHS.',error);
+    if(preview)preview.innerHTML='<p class="mt-2 text-xs text-ero">Gagal membaca dokumen KHS.</p>';
+    toast('Gagal membaca KHS. Coba file lain.');
   });
 }
 async function saveKHS(){
-  const n=+$('#u_n')?.value;
-  const groups=draftSemesters?.length?draftSemesters:[{n,c:draft}];
-  if(!groups.length||groups.some(group=>!Number.isInteger(group.n)||group.n<1||group.n>14||!group.c.length||group.c.some(c=>!c.name.trim()||!Number.isInteger(+c.sks)||+c.sks<1))){
-    return toast('Pastikan data mata kuliah valid dan nomor semester antara 1 sampai 14');
+  const selectedSemester=Number($('#u_n')?.value);
+  let groups=draftSemesters?.length?draftSemesters:[{n:selectedSemester,c:draft}];
+  if(groups.length===1){
+    if(!Number.isInteger(selectedSemester)||selectedSemester<1||selectedSemester>14)return toast('Semester harus antara 1 sampai 14.');
+    groups=[{...groups[0],n:selectedSemester,c:(groups[0].c||[]).map(course=>tagCourseWithCurriculum(course,selectedSemester))}];
+  }else{
+    groups=groups.map(group=>({...group,c:(group.c||[]).map(course=>tagCourseWithCurriculum(course,group.n))}));
   }
-  if(!draftSemesters?.length&&(!Number.isInteger(n)||n<1||n>14))return toast('Semester harus antara 1 sampai 14');
+  if(!groups.length||groups.some(group=>!Number.isInteger(Number(group.n))||group.n<1||group.n>14||!group.c?.length||group.c.some(course=>!String(course.name||'').trim()||!Number.isInteger(Number(course.sks))||Number(course.sks)<1||!(course.g in G)))){
+    return toast('Pastikan semester, nama mata kuliah, SKS, dan nilai valid sebelum menyimpan.');
+  }
   const previous=st;
   st={...st,sems:[...st.sems]};
   for(const group of groups){
-    const index=st.sems.findIndex(s=>s.n===group.n);
-    const courses=group.c.map(c=>({...c,sks:+c.sks}));
-    if(index<0)st.sems.push({n:group.n,c:courses});else st.sems[index]={n:group.n,c:courses};
+    const index=st.sems.findIndex(item=>Number(item.n)===Number(group.n));
+    const courses=group.c.map(course=>({...course,sks:Number(course.sks)}));
+    if(index<0)st.sems.push({n:Number(group.n),c:courses});
+    else st.sems[index]={n:Number(group.n),c:courses};
   }
-  st.sems.sort((a,b)=>a.n-b.n);st.plan=null;
+  st.sems.sort((x,y)=>x.n-y.n);st.plan=null;
   if(!await save()){st=previous;return}
-  closeM();open=groups.at(-1).n;go('riwayat');toast(`${groups.length} semester KHS disimpan`)
+  const analysis=curriculumAnalysis(semesters(),USER?.angkatan);
+  const savedCourses=groups.reduce((sum,group)=>sum+group.c.length,0);
+  const mapped=groups.reduce((sum,group)=>sum+group.c.filter(course=>course.curriculumStatus==='matched').length,0);
+  const review=groups.reduce((sum,group)=>sum+group.c.filter(course=>['semester-mismatch','ambiguous','unmatched'].includes(course.curriculumStatus)).length,0);
+  const message=analysis
+    ? `KHS berhasil disimpan dan dianalisis. ${savedCourses} mata kuliah diproses; ${mapped} cocok dengan kurikulum dan ${review} perlu ditinjau. IPK ${f(analysis.ipk)}, total ${analysis.totalSks} SKS. ${analysis.estimatedTerm?'Dengan angkatan '+USER?.angkatan+', estimasi lulus: '+analysis.estimatedTerm+'.':'Estimasi sisa studi sekitar semester '+analysis.estimatedSemester+'. Isi tahun angkatan untuk melihat tahun akademik.'} ${analysis.missing.length} mata kuliah wajib belum tuntas teridentifikasi dan ${analysis.atRisk.length} nilai berada di bawah C.`
+    : `KHS berhasil disimpan. IPK ${f(agg().ipk)}, total ${agg().sks} SKS. Admin belum mengaktifkan kurikulum Excel, jadi analisis prasyarat dan estimasi berdasarkan mata kuliah wajib belum tersedia.`;
+  st.chat.push({r:'b',h:escapeHTML(message),t:tm()});
+  if(!await save())toast('KHS tersimpan, tetapi ringkasan analisis belum berhasil disimpan.');
+  closeM();go('chat');toast('KHS disimpan. Lulu menyiapkan analisis akademikmu.');
 }
 // ---------- render ----------
 const TABS=[['chat','auto_awesome','LULU AI'],['ringkasan','dashboard','RINGKASAN'],['matkul','menu_book','MATA KULIAH'],['simulasi','calculate','SIMULASI'],['riwayat','history_edu','RIWAYAT']];
