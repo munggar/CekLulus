@@ -3,8 +3,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
+const XLSX = require('xlsx');
 
 const root = path.resolve(__dirname, '..');
+const xlsxBrowserBundle = fs.readFileSync(path.join(path.dirname(require.resolve('xlsx')), 'dist', 'xlsx.full.min.js'), 'utf8');
 const curriculum = require(path.join(root, 'server/data/curriculum-sti.json'));
 const mime = {
   '.html': 'text/html; charset=utf-8',
@@ -47,6 +49,7 @@ async function main() {
 
   try {
     await page.goto('http://127.0.0.1:4173', { waitUntil: 'domcontentloaded' });
+    await page.addScriptTag({ content: xlsxBrowserBundle });
     await page.waitForSelector('#auth input');
 
     await page.evaluate((data) => {
@@ -172,6 +175,93 @@ async function main() {
       await page.evaluate(() => closeM());
       results.push({ width, tab: 'profile-modal', scrollWidth: width });
     }
+
+
+    // Verify the complete Excel preview and admin import action at a narrow viewport.
+    await page.setViewportSize({ width: 320, height: 950 });
+    let importedPayload = null;
+    let activeCurriculum = curriculum;
+    await page.route('**/api/curriculum', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        meta: { sourceFile: 'responsive-import.xlsx', program: 'Sistem dan Teknologi Informasi (S1)', courseCount: activeCurriculum.length },
+        courses: activeCurriculum
+      })
+    }));
+    await page.route('**/api/admin/students', route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ students: [] })
+    }));
+    await page.route('**/api/admin/curriculum', async route => {
+      importedPayload = route.request().postDataJSON();
+      activeCurriculum = importedPayload.courses;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, meta: { courseCount: activeCurriculum.length, sourceFile: importedPayload.sourceFile } })
+      });
+    });
+    await page.evaluate(() => {
+      USER = { id: 'admin-test', name: 'Admin CekLulus', role: 'admin' };
+      shell(true);
+      render();
+    });
+
+    const importBook = XLSX.utils.book_new();
+    const importRows = [
+      ['Program Studi: Sistem dan Teknologi Informasi (S1)'],
+      ['Universitas Muhammadiyah Prof. DR. HAMKA'],
+      [],
+      ['semester', 'kode_mk', 'nama_mk', 'kategori', 'sks', 'Mata Kuliah Prasyarat', 'Keterangan / Catatan'],
+      [1, '03045108', 'Pendidikan Agama', 'MKWU / AIK', 2, 'Tidak Ada', 'Wajib Semester 1'],
+      [3, '03045081', 'Ketrampilan Komunikasi', 'Pengayaan / Soft Skill', 2, 'Tidak Ada', 'Dapat diambil di semester 3/5/7'],
+      [5, '03045081', 'Ketrampilan Komunikasi', 'Matkul Pengayaan', 2, 'Tidak Ada', 'Dapat diambil di semester 3/5/7']
+    ];
+    XLSX.utils.book_append_sheet(importBook, XLSX.utils.aoa_to_sheet(importRows), 'Prasyarat Mata Kuliah');
+    const importBuffer = XLSX.write(importBook, { bookType: 'xlsx', type: 'buffer' });
+    await page.locator('#curriculum_excel').setInputFiles({
+      name: 'DATA MK UNTUK-ADMIN COURSE RECOM.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: importBuffer
+    });
+    await page.waitForFunction(() => Array.isArray(CURRICULUM_DRAFT) && CURRICULUM_DRAFT.length === 3);
+    const preview = await page.evaluate(() => ({
+      text: document.querySelector('#curriculum-preview')?.innerText || '',
+      saveDisabled: document.querySelector('#curriculum-import-button')?.disabled,
+      scrollWidth: document.documentElement.scrollWidth,
+      viewport: window.innerWidth
+    }));
+    assert.equal(preview.saveDisabled, false, 'Valid Excel preview should enable the import action.');
+    assert.match(preview.text, /3 MATA KULIAH/, 'Excel preview should show all three valid rows.');
+    assert.match(preview.text, /03045081/, 'Excel preview should warn about the duplicate source code.');
+    assert.ok(preview.scrollWidth <= preview.viewport + 1, 'Excel preview must not create page-level horizontal overflow at 320px.');
+
+    await page.evaluate(() => importCurriculum());
+    await page.locator('#modal button').filter({ hasText: 'Ya, impor data' }).click();
+    await page.waitForFunction(() => !!CURRICULUM_META && CURRICULUM.length === 3);
+    assert.ok(importedPayload, 'Admin import endpoint should receive the parsed workbook.');
+    assert.equal(importedPayload.courses.length, 3);
+    assert.equal(importedPayload.sourceFile, 'DATA MK UNTUK-ADMIN COURSE RECOM.xlsx');
+    assert.equal(importedPayload.sheet, 'Prasyarat Mata Kuliah');
+    assert.equal(importedPayload.courses[2].semester, 5);
+    assert.equal(importedPayload.courses[2].code, '03045081');
+
+    // Confirm that the semester inference uses the workbook's allowed-semester note.
+    const inferred = await page.evaluate(() => assignKhsSemesters([{
+      n: 7,
+      c: [{
+        name: 'Ketrampilan Komunikasi',
+        code: '03045081',
+        curriculumCode: '03045081',
+        sks: 2,
+        g: 'A',
+        t: 'P'
+      }]
+    }], 7, false));
+    assert.equal(inferred[0].n, 7, 'A course allowed in semester 3/5/7 should stay in semester 7 when reviewed there.');
+    assert.equal(inferred[0].c[0].curriculumStatus, 'matched');
 
     assert.deepEqual(pageErrors, [], `Unexpected browser JavaScript errors: ${pageErrors.join('; ')}`);
     console.log(`Responsive smoke test passed: ${results.length} page/viewport checks across ${widths.join(', ')}px.`);
