@@ -117,6 +117,23 @@ async function main() {
       }
 
       await page.evaluate(() => {
+        USER = { id: '2403045007', name: 'Munggar Fajar Muharram', prodi: 'Sistem dan Teknologi Informasi', angkatan: 2023, role: 'student' };
+        shell(true);
+        render();
+        upModal();
+      });
+      await page.waitForTimeout(20);
+      const khsModal = await page.evaluate(() => {
+        const modal = document.querySelector('#modal>div>div');
+        const rect = modal?.getBoundingClientRect();
+        return { viewport: window.innerWidth, width: rect?.width || 0, left: rect?.left || 0, right: rect?.right || 0, scrollWidth: document.documentElement.scrollWidth };
+      });
+      assert.ok(khsModal.width > 0 && khsModal.width <= width + 1 && khsModal.left >= -1 && khsModal.right <= width + 1 && khsModal.scrollWidth <= width + 1,
+        `KHS upload modal overflows at ${width}px: ${JSON.stringify(khsModal)}`);
+      await page.evaluate(() => closeM());
+      results.push({ width, tab: 'khs-upload-modal', scrollWidth: khsModal.scrollWidth });
+
+      await page.evaluate(() => {
         USER = { id: 'admin-test', name: 'Admin CekLulus', role: 'admin' };
         shell(true);
         render();
@@ -125,6 +142,18 @@ async function main() {
       const adminWidth = await page.evaluate(() => document.documentElement.scrollWidth);
       assert.ok(adminWidth <= width + 1, `Admin dashboard overflows at ${width}px: ${adminWidth}`);
       results.push({ width, tab: 'admin', scrollWidth: adminWidth });
+
+      await page.evaluate(() => cfgModal());
+      await page.waitForTimeout(20);
+      const adminModal = await page.evaluate(() => {
+        const modal = document.querySelector('#modal>div>div');
+        const rect = modal?.getBoundingClientRect();
+        return { viewport: window.innerWidth, width: rect?.width || 0, left: rect?.left || 0, right: rect?.right || 0, scrollWidth: document.documentElement.scrollWidth };
+      });
+      assert.ok(adminModal.width > 0 && adminModal.width <= width + 1 && adminModal.left >= -1 && adminModal.right <= width + 1 && adminModal.scrollWidth <= width + 1,
+        `Admin rules modal overflows at ${width}px: ${JSON.stringify(adminModal)}`);
+      await page.evaluate(() => closeM());
+      results.push({ width, tab: 'admin-rules-modal', scrollWidth: adminModal.scrollWidth });
 
       await page.evaluate(() => {
         USER = { id: '2403045007', name: 'Munggar Fajar Muharram', prodi: 'Sistem dan Teknologi Informasi', angkatan: 2023, role: 'student' };
