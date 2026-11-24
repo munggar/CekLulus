@@ -416,28 +416,11 @@ const tm=()=>new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-dig
 function mic(){const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R)return toast('Suara tidak didukung browser ini');const r=new R();r.lang='id-ID';r.onresult=e=>{$('#ci').value=e.results[0][0].transcript};r.onerror=()=>toast('Mikrofon tidak bisa diakses');r.start()}
 
 async function getAiAnswer(question){
-  const currentSummary = {
-    name: NAME,
-    id: USER?.id || 'guest',
-    role: USER?.role || 'student',
-    angkatan: USER?.angkatan || null,
-    cfg: { ...CFG },
-    khs: { semesters: semesters().map(s => ({ semester: s.n, courses: s.c.map(c => ({ name: c.name, code: c.curriculumCode||c.code||'', sks: Number(c.sks) || 0, grade: c.g, type: c.t || 'W', curriculumStatus:c.curriculumStatus||'unknown', curriculumSemester:c.curriculumSemester||null })) })) },
-    curriculum: CURRICULUM.map(course=>({code:course.code,name:course.name,semester:course.semester,sks:course.sks,category:course.category,prerequisite:course.prerequisite,notes:course.notes})),
-    summary: {
-      totalSks: agg().sks,
-      ipk: agg().ipk,
-      latestIps: latestIps(),
-      risky: risky().slice(0, 10),
-      graduationAnalysis: curriculumAnalysis(semesters(),USER?.angkatan)
-    }
-  };
-
   try {
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {}) },
-      body: JSON.stringify({ message: question, student: currentSummary })
+      body: JSON.stringify({ message: question })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Backend AI mengembalikan kesalahan.');
@@ -445,22 +428,23 @@ async function getAiAnswer(question){
     throw new Error('Backend AI tidak mengembalikan jawaban.');
   } catch (error) {
     console.warn('AI backend unavailable, using local fallback:', error);
-    return `AI Groq belum tersedia (${error.message}). Jawaban lokal sementara: ${fallbackReply(question)}`;
+    return `Lulu belum dapat menghubungi layanan AI (${error.message}). Jawaban lokal sementara: ${fallbackReply(question)}`;
   }
 }
-
 async function ask(t){
   if(AI_PENDING)return;
   t=t??$('#ci')?.value;
   if(!t||!t.trim())return;
   const value=t.replace(/</g,'&lt;');
   st.chat.push({r:'u',h:value,t:tm()});
-  save();
   tab='chat';
   AI_PENDING=true;
   render();
   try{
-    const answer=await getAiAnswer(t);
+    const saved=await save();
+    const answer=saved
+      ? await getAiAnswer(t)
+      : `Data akademik belum berhasil disimpan ke server. Jawaban lokal sementara: ${fallbackReply(t)}`;
     st.chat.push({r:'b',h:answer,t:tm()});
   }catch(error){
     console.error('Lulu AI gagal menjawab.',error);
