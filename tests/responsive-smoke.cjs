@@ -250,16 +250,22 @@ async function main() {
     }));
     assert.equal(inputState.fileCount, 1, `Excel file must be attached to the admin input: ${JSON.stringify(inputState)}`);
     assert.equal(inputState.parser, 'function', 'Admin Excel parser must be available.');
-    await page.evaluate(() => previewCurriculumExcel(document.querySelector('#curriculum_excel')));
-    await page.waitForFunction(() => (document.querySelector('#curriculum-preview')?.innerText || '').trim().length > 0);
-    const preview = await page.evaluate(() => ({
-      text: document.querySelector('#curriculum-preview')?.innerText || '',
-      draftCount: Array.isArray(CURRICULUM_DRAFT) ? CURRICULUM_DRAFT.length : 0,
-      saveDisabled: document.querySelector('#curriculum-import-button')?.disabled,
-      scrollWidth: document.documentElement.scrollWidth,
-      viewport: window.innerWidth
-    }));
-    assert.equal(preview.draftCount, 3, `Excel parser should extract three valid rows. Preview output: ${preview.text}`);
+    const preview = await page.evaluate(async () => {
+      const input = document.querySelector('#curriculum_excel');
+      await previewCurriculumExcel(input);
+      return {
+        text: document.querySelector('#curriculum-preview')?.innerText || '',
+        previewExists: !!document.querySelector('#curriculum-preview'),
+        draftCount: Array.isArray(CURRICULUM_DRAFT) ? CURRICULUM_DRAFT.length : 0,
+        saveDisabled: document.querySelector('#curriculum-import-button')?.disabled,
+        fileCount: input?.files?.length || 0,
+        fileName: input?.files?.[0]?.name || '',
+        xlsxAvailable: !!window.XLSX,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewport: window.innerWidth
+      };
+    });
+    assert.equal(preview.draftCount, 3, `Excel parser should extract three valid rows. Diagnostics: ${JSON.stringify(preview)}`);
     assert.equal(preview.saveDisabled, false, 'Valid Excel preview should enable the import action.');
     assert.match(preview.text, /3 MATA KULIAH/, 'Excel preview should show all three valid rows.');
     assert.match(preview.text, /03045081/, 'Excel preview should warn about the duplicate source code.');
