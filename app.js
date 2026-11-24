@@ -30,6 +30,7 @@ const DEFAULT_CFG={total:144,maxSem:14,minIpk:2};
 let CFG={...DEFAULT_CFG};
 const saveCfg=async()=>{const previous={...CFG};try{const data=await api('/api/settings',{method:'PUT',body:{settings:CFG}});CFG=data.settings;return true}catch(error){CFG=previous;console.error('Gagal menyimpan aturan studi.',error);toast('Aturan studi gagal disimpan: '+error.message);render();return false}};
 let tab='chat',filter='all',q='',open=6,AI_PENDING=false;
+let CURRICULUM=[],CURRICULUM_META=null,CURRICULUM_DRAFT=null,CURRICULUM_DRAFT_INFO=null;
 // ---------- perhitungan ----------
 const sem=s=>{const k=s.c.reduce((a,c)=>a+c.sks,0),p=s.c.reduce((a,c)=>a+c.sks*G[c.g],0);return{sks:k,pts:p,ips:k?p/k:0}};
 const agg=(arr=st.sems)=>{let k=0,p=0;arr.forEach(s=>{const m=sem(s);k+=m.sks;p+=m.pts});return{sks:k,pts:p,ipk:k?p/k:0}};
@@ -60,6 +61,140 @@ const go=t=>{tab=t;render();scrollTo(0,0)};
 const chip=(t,c)=>`<span class="text-[11px] font-bold px-2.5 py-1 rounded-full ${c}">${t}</span>`;
 const gcol=g=>G[g]>=3.5?'bg-sec text-p':G[g]>=3?'bg-sc text-ov':G[g]>=2?'bg-sc text-ov':'bg-erc text-ero';
 // ---------- layar ----------
+
+async function loadCurriculum(){
+  try{
+    const payload=await api('/api/curriculum');
+    CURRICULUM=Array.isArray(payload.courses)?payload.courses:[];
+    CURRICULUM_META=payload.meta||null;
+    if(USER)render();
+  }catch(error){
+    console.warn('Kurikulum belum dapat dimuat:',error.message);
+    CURRICULUM=[];CURRICULUM_META=null;
+  }
+}
+function normalizeCourseKey(value){
+  return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase()
+    .replace(/^[a-z]{0,5}[-.]?\\d{4,}\\s*/,'')
+    .replace(/\\b\\d{5,}\\b/g,'')
+    .replace(/[^a-z0-9]+/g,' ').trim().replace(/\\s+/g,' ');
+}
+function curriculumMatches(course){
+  if(!CURRICULUM.length)return[];
+  const code=String(course?.curriculumCode||course?.code||'').trim();
+  if(code){
+    const byCode=CURRICULUM.filter(item=>String(item.code||'').trim()===code);
+    if(byCode.length)return byCode;
+  }
+  const key=normalizeCourseKey(course?.name);
+  if(!key)return[];
+  return CURRICULUM.filter(item=>normalizeCourseKey(item.name)===key);
+}
+function tagCourseWithCurriculum(course,semester){
+  const matches=curriculumMatches(course);
+  if(!matches.length)return{...course,curriculumStatus:CURRICULUM.length?'unmatched':'not-configured'};
+  const selected=matches.find(item=>Number(item.semester)===Number(semester))||(matches.length===1?matches[0]:null);
+  return{
+    ...course,
+    curriculumCode:selected?.code||course.curriculumCode||'',
+    curriculumSemester:selected?Number(selected.semester):null,
+    curriculumCategory:selected?.category||'',
+    curriculumPrerequisite:selected?.prerequisite||'',
+    curriculumNotes:selected?.notes||'',
+    curriculumStatus:selected?'matched':'ambiguous',
+    curriculumCandidateSemesters:[...new Set(matches.map(item=>Number(item.semester)))]
+  };
+}
+function assignKhsSemesters(groups,fallbackSemester,explicitSemester=false){
+  if(!Array.isArray(groups))return[];
+  let normalized=groups.map(group=>({n:Number(group.n)||fallbackSemester,c:(group.c||[]).map(course=>({...course}))}));
+  if(!explicitSemester&&normalized.length===1&&CURRICULUM.length){
+    const votes=new Map();
+    let matched=0;
+    for(const course of normalized[0].c){
+      const matches=curriculumMatches(course);
+      if(!matches.length)continue;
+      matched++;
+      const candidates=[...new Set(matches.map(item=>Number(item.semester)))];
+      const preferred=candidates.includes(Number(fallbackSemester))?Number(fallbackSemester):candidates.length===1?candidates[0]:null;
+      if(preferred)votes.set(preferred,(votes.get(preferred)||0)+1);
+    }
+    const ranked=[...votes.entries()].sort((x,y)=>y[1]-x[1]);
+    if(ranked.length&&ranked[0][1]>=Math.max(1,Math.ceil(matched*.5))&&(!ranked[1]||ranked[0][1]>ranked[1][1])){
+      normalized[0].n=ranked[0][0];
+      normalized[0].semesterSource='curriculum-match';
+    }else{
+      normalized[0].semesterSource='manual-review';
+    }
+  }
+  return normalized.map(group=>({...group,c:group.c.map(course=>tagCourseWithCurriculum(course,group.n))}));
+}
+function academicTermForSemester(semester,angkatan){
+  if(!angkatan||!Number.isFinite(Number(angkatan)))return null;
+  const startYear=Number(angkatan)+Math.floor((Number(semester)-1)/2);
+  const term=Number(semester)%2?'Ganjil':'Genap';
+  return `Semester ${semester} · ${term} ${startYear}/${startYear+1}`;
+}
+function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
+  if(!CURRICULUM.length)return null;
+  const courses=history.flatMap(group=>(group.c||[]).map(course=>({...course,semester:Number(group.n)||0})));
+  const bestByKey=new Map();
+  for(const course of courses){
+    const candidates=curriculumMatches(course);
+    const key=String(course.curriculumCode||course.code||candidates[0]?.code||normalizeCourseKey(course.name));
+    if(!key)continue;
+    const grade=G[course.g]??-1;
+    const prior=bestByKey.get(key);
+    if(!prior||grade>(G[prior.g]??-1))bestByKey.set(key,course);
+  }
+  const required=CURRICULUM.filter(item=>/^wajib\\b/i.test(String(item.notes||''))||/^(praktik kerja|skripsi)$/i.test(String(item.name||'')));
+  const completed=required.filter(item=>{
+    const record=bestByKey.get(String(item.code||normalizeCourseKey(item.name)));
+    return record&&(G[record.g]??-1)>=1;
+  });
+  const missing=required.filter(item=>{
+    const record=bestByKey.get(String(item.code||normalizeCourseKey(item.name)));
+    return !record||(G[record.g]??-1)<1;
+  }).map(item=>{
+    const record=bestByKey.get(String(item.code||normalizeCourseKey(item.name)));
+    return{...item,status:record?'Perlu mengulang':'Belum diambil',grade:record?.g||null,
+      suggestedSemester:Math.max(Number(item.semester)||1,Math.max(1,latestSem()+1))};
+  });
+  const atRisk=courses.filter(course=>(G[course.g]??-1)<2).map(course=>({name:course.name,grade:course.g,sks:course.sks,semester:course.semester}));
+  const totals=agg(history);
+  const currentSemester=history.reduce((max,item)=>Math.max(max,Number(item.n)||0),0);
+  const recent=history.slice(-2).map(item=>sem(item).sks).filter(Number.isFinite);
+  const expectedLoad=recent.length?Math.max(12,Math.min(24,recent.reduce((x,y)=>x+y,0)/recent.length)):20;
+  const remainingSks=Math.max(0,CFG.total-totals.sks);
+  const byCredits=currentSemester+Math.ceil(remainingSks/expectedLoad);
+  const nextRequired=Math.max(0,...missing.map(item=>item.suggestedSemester));
+  const estimatedSemester=Math.max(currentSemester||1,byCredits,nextRequired);
+  const cohort=Number(angkatan)||null;
+  const dCount=courses.filter(course=>course.g==='D').length;
+  const practice=bestByKey.get(String(CURRICULUM.find(item=>/^praktik kerja$/i.test(item.name))?.code||''));
+  const thesisConditions={
+    sks75:totals.sks>=Math.ceil(CFG.total*.75),
+    ipk:totals.ipk>=2.75,
+    maximumD:dCount<=1,
+    practice:!!practice&&(G[practice.g]??-1)>=1
+  };
+  const thesisReady=Object.values(thesisConditions).every(Boolean);
+  const unknownPrerequisites=[...new Set(CURRICULUM
+    .map(item=>String(item.prerequisite||'').trim())
+    .filter(value=>value&&!/^tidak ada$/i.test(value)&&!/^telah mengambil/i.test(value)&&!/^\\d/.test(value))
+    .filter(value=>{
+      const parts=value.split(/,|\\bdan\\b|\\bor\\b/i).map(part=>normalizeCourseKey(part)).filter(Boolean);
+      return parts.length>0&&parts.some(part=>!CURRICULUM.some(item=>normalizeCourseKey(item.name)===part));
+    }))];
+  return{
+    totalSks:totals.sks,ipk:totals.ipk,currentSemester,remainingSks,expectedLoad,
+    requiredCount:required.length,completedRequired:completed.length,missing,
+    atRisk,estimatedSemester,estimatedTerm:academicTermForSemester(estimatedSemester,cohort),
+    cohort,thesisConditions,thesisReady,unknownPrerequisites,
+    progressPercent:required.length?Math.round(completed.length/required.length*100):0
+  };
+}
+
 function vRingkasan(){
  const history=semesters(),a=agg(history),n=latestSem(),last=history.at(-1),prev=agg(history.slice(0,-1)),failed=last?last.c.filter(c=>G[c.g]<2):[],
   pl=st.plan||{sks:20,ips:3.5,sp:false},P=project(pl.sks,pl.ips,pl.sp),
