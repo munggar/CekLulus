@@ -60,3 +60,6 @@ jobs:
         env:
           NODE_PATH: /tmp/ceklulus-browser-tests/node_modules
         run: node tests/responsive-smoke.cjs
+
+      - name: Verify deployed production readiness
+        run: node tests/production-readiness.cjs
