@@ -912,15 +912,56 @@ function adminOpenStudent(token){
  <button onclick="closeM()" class="mt-4 w-full rounded-xl bg-p py-3 font-bold text-white">Tutup analisis</button>`);
 }
 function curriculumDiagnostics(courses=CURRICULUM){
- const codes={};courses.forEach(item=>{const code=String(item.code||'').trim();if(code)codes[code]=(codes[code]||0)+1});
- const duplicateCodes=Object.entries(codes).filter(([,count])=>count>1).map(([code])=>code);
- const names=new Set(courses.map(item=>normalizeCourseKey(item.name)));
- const unresolved=[...new Set(courses.map(item=>String(item.prerequisite||'').trim()).filter(value=>{
-  if(!value||/^tidak ada$/i.test(value)||/^telah mengambil/i.test(value)||/^\d/.test(value))return false;
-  const parts=value.split(/,|\bdan\b|\bor\b/i).map(normalizeCourseKey).filter(Boolean);
-  return parts.some(part=>!names.has(part));
- }))];
- return{duplicateCodes,unresolved};
+ const normalizeName=value=>normalizeCourseKey(value);
+ const courseNames=new Set(courses.map(item=>normalizeName(item.name)).filter(Boolean));
+ const codeGroups=new Map();
+ for(const item of courses){
+  const code=String(item.code||'').trim();
+  if(!code)continue;
+  if(!codeGroups.has(code))codeGroups.set(code,[]);
+  codeGroups.get(code).push(item);
+ }
+ const duplicateCodes=[],multiSemester=[];
+ const allowedFromNotes=notes=>{
+  const match=String(notes||'').match(/(?:semester|sem)\s*(\d+(?:\s*(?:\/|,|dan)\s*\d+)*)/i);
+  return match?[...new Set((match[1].match(/\d+/g)||[]).map(Number).filter(n=>n>=1&&n<=14))]:[];
+ };
+ for(const [code,items] of codeGroups){
+  if(items.length<2)continue;
+  const sameCourse=items.every(item=>normalizeName(item.name)===normalizeName(items[0].name)&&Number(item.sks)===Number(items[0].sks));
+  const allDeclareMultiSemester=items.every(item=>allowedFromNotes(item.notes).length>=2);
+  if(sameCourse&&allDeclareMultiSemester){
+   multiSemester.push({
+    code,name:items[0].name,
+    semesters:[...new Set(items.map(item=>Number(item.semester)).filter(Boolean))].sort((a,b)=>a-b),
+    allowedSemesters:[...new Set(items.flatMap(item=>allowedFromNotes(item.notes)))].sort((a,b)=>a-b),
+    rowCount:items.length
+   });
+  }else duplicateCodes.push(code);
+ }
+ const unresolved=new Set();
+ const missingPrerequisiteParts=value=>{
+  const raw=String(value||'').trim();
+  if(!raw||/^tidak ada$/i.test(raw)||/^telah mengambil\b/i.test(raw)||
+     /minimum\s*75%|nilai\s*d\s*maksimal|ipk\s*minimal|ujian\s*proposal|telah\s*mengikuti\s*praktik\s*kerja/i.test(raw))return[];
+  const normalized=normalizeName(raw);
+  if(courseNames.has(normalized))return[];
+  const commaParts=raw.split(/[,;\n]+/).map(part=>part.trim().replace(/^(?:dan|or)\s+/i,'')).filter(Boolean);
+  const parts=commaParts.length>1?commaParts:[raw];
+  const missing=[];
+  for(const part of parts){
+   const key=normalizeName(part);
+   if(!key||courseNames.has(key))continue;
+   const conjunctionParts=part.split(/\s+(?:dan|or)\s+/i).map(x=>x.trim()).filter(Boolean);
+   if(conjunctionParts.length>1&&conjunctionParts.every(x=>courseNames.has(normalizeName(x))))continue;
+   missing.push(part);
+  }
+  return missing;
+ };
+ for(const item of courses){
+  for(const part of missingPrerequisiteParts(item.prerequisite))unresolved.add(part);
+ }
+ return{duplicateCodes,multiSemester,unresolved:[...unresolved].sort((a,b)=>a.localeCompare(b,'id'))};
 }
 function normalizeExcelHeader(value){
  return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -984,9 +1025,10 @@ async function previewCurriculumExcel(input){
   if(preview)preview.innerHTML=`<div class="rounded-2xl border border-[#d8e6de] bg-[#f6faf7] p-4">
    <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-sm text-p">Pratinjau impor berhasil dibaca</b><span class="rounded-full bg-sec px-2 py-1 text-[10px] font-bold text-se">${courses.length} MATA KULIAH</span></div>
    <p class="mt-1 break-words text-xs text-ov">${escapeHTML(file.name)} · Sheet: ${escapeHTML(sheetName)}</p>
-   <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3"><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">SEMESTER</div><b class="text-xl">${new Set(courses.map(course=>course.semester)).size}</b></div><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">TOTAL SKS DATA</div><b class="text-xl">${courses.reduce((sum,course)=>sum+course.sks,0)}</b></div><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">KODE GANDA</div><b class="text-xl">${diagnostics.duplicateCodes.length}</b></div></div>
-   ${diagnostics.duplicateCodes.length?`<p class="mt-3 rounded-xl bg-[#fff7e6] p-3 text-xs text-[#875b16]"><b>Perlu ditinjau:</b> kode berulang ${diagnostics.duplicateCodes.map(escapeHTML).join(', ')}. Baris tidak dihapus; sistem tetap mempertahankan data sumber.</p>`:''}
-   ${diagnostics.unresolved.length?`<p class="mt-2 rounded-xl bg-[#fff7e6] p-3 text-xs text-[#875b16]"><b>Prasyarat yang tidak cocok dengan nama mata kuliah di sheet:</b> ${diagnostics.unresolved.slice(0,6).map(escapeHTML).join('; ')}${diagnostics.unresolved.length>6?' dan lainnya':''}. Periksa kembali referensi ini sebelum dijadikan aturan final.</p>`:''}
+   <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3"><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">SEMESTER</div><b class="text-xl">${new Set(courses.map(course=>course.semester)).size}</b></div><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">TOTAL SKS DATA</div><b class="text-xl">${courses.reduce((sum,course)=>sum+course.sks,0)}</b></div><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">KODE BENTROK</div><b class="text-xl">${diagnostics.duplicateCodes.length}</b></div></div>
+   ${diagnostics.multiSemester.length?`<p class="mt-3 rounded-xl border border-[#cfe6d9] bg-[#f0f8f3] p-3 text-xs leading-5 text-[#245b46]"><b>Penawaran lintas semester:</b> ${diagnostics.multiSemester.map(item=>`${escapeHTML(item.name)} (${escapeHTML(item.code)}) tercatat pada semester ${item.semesters.join('/')} dan diizinkan pada semester ${item.allowedSemesters.join('/')}`).join('; ')}. Ini bukan konflik kode.</p>`:''}
+   ${diagnostics.duplicateCodes.length?`<p class="mt-3 rounded-xl bg-[#fff7e6] p-3 text-xs text-[#875b16]"><b>Kode yang benar-benar bentrok:</b> ${diagnostics.duplicateCodes.map(escapeHTML).join(', ')}. Kode tersebut digunakan untuk nama mata kuliah atau SKS yang berbeda; periksa sumber Excel.</p>`:''}
+   ${diagnostics.unresolved.length?`<p class="mt-2 rounded-xl bg-[#fff7e6] p-3 text-xs text-[#875b16]"><b>Referensi prasyarat yang tidak ditemukan:</b> ${diagnostics.unresolved.slice(0,6).map(escapeHTML).join('; ')}${diagnostics.unresolved.length>6?' dan lainnya':''}. Nama mata kuliah yang memuat kata "dan" diperiksa sebagai satu nama utuh, bukan dipotong sembarangan.</p>`:''}
    ${rowErrors.length?`<p class="mt-2 rounded-xl bg-erc p-3 text-xs text-ero">Baris dilewati karena format tidak valid: ${rowErrors.slice(0,12).join(', ')}${rowErrors.length>12?'…':''}.</p>`:''}
    <div class="mt-3 overflow-x-auto"><table class="w-full min-w-[520px] text-left text-xs"><thead><tr class="border-b border-ol text-ov"><th class="p-2">Semester</th><th class="p-2">Kode</th><th class="p-2">Mata Kuliah</th><th class="p-2">SKS</th><th class="p-2">Kategori</th></tr></thead><tbody>${courses.slice(0,6).map(course=>`<tr class="border-b border-ol/50"><td class="p-2">${course.semester}</td><td class="p-2">${escapeHTML(course.code)}</td><td class="p-2">${escapeHTML(course.name)}</td><td class="p-2">${course.sks}</td><td class="p-2">${escapeHTML(course.category)}</td></tr>`).join('')}</tbody></table></div>
   </div>`;
@@ -1054,8 +1096,9 @@ function vAdmin(){
     <span class="rounded-full ${uploaded?'bg-sec text-se':'bg-sc text-ov'} px-3 py-1.5 text-[10px] font-bold">${uploaded?'KURIKULUM AKTIF':'BELUM DIIMPOR'}</span>
    </div>
    ${meta?`<div class="mt-4 rounded-2xl bg-[#f4f8f5] p-4"><b class="block break-words text-sm text-p">${escapeHTML(meta.sourceFile||'File kurikulum')}</b><div class="mt-1 text-xs leading-5 text-ov">${escapeHTML(meta.program||'')} · ${escapeHTML(meta.sheet||'')} · ${CURRICULUM.length} mata kuliah · ${new Set(CURRICULUM.map(item=>item.semester)).size} semester</div><div class="mt-1 text-[10px] text-ov">Terakhir diperbarui: ${meta.importedAt?new Date(meta.importedAt).toLocaleString('id-ID'):'Tidak tercatat'}</div></div>`:''}
-   ${diagnostics.duplicateCodes.length?`<p class="mt-3 rounded-xl bg-[#fff7e6] p-3 text-xs leading-5 text-[#875b16]"><b>Peringatan data sumber:</b> kode mata kuliah ganda: ${diagnostics.duplicateCodes.map(escapeHTML).join(', ')}. Data dipertahankan sesuai file Excel.</p>`:''}
-   ${diagnostics.unresolved.length?`<p class="mt-2 rounded-xl bg-[#fff7e6] p-3 text-xs leading-5 text-[#875b16]"><b>Prasyarat untuk ditinjau:</b> ${diagnostics.unresolved.slice(0,5).map(escapeHTML).join('; ')}${diagnostics.unresolved.length>5?' dan lainnya':''}. Sistem tidak akan menebak mata kuliah pengganti.</p>`:''}
+   ${diagnostics.multiSemester.length?`<p class="mt-3 rounded-xl border border-[#cfe6d9] bg-[#f0f8f3] p-3 text-xs leading-5 text-[#245b46]"><b>Penawaran lintas semester:</b> ${diagnostics.multiSemester.map(item=>`${escapeHTML(item.name)} (${escapeHTML(item.code)}) tercatat pada semester ${item.semesters.join('/')} dan diizinkan pada semester ${item.allowedSemesters.join('/')}`).join('; ')}. Entri ini dipertahankan sebagai satu mata kuliah yang dapat diambil pada beberapa semester.</p>`:''}
+   ${diagnostics.duplicateCodes.length?`<p class="mt-3 rounded-xl bg-[#fff7e6] p-3 text-xs leading-5 text-[#875b16]"><b>Peringatan konflik kode:</b> ${diagnostics.duplicateCodes.map(escapeHTML).join(', ')} digunakan oleh data mata kuliah yang berbeda. Periksa kode dan nama pada file Excel.</p>`:''}
+   ${diagnostics.unresolved.length?`<p class="mt-2 rounded-xl bg-[#fff7e6] p-3 text-xs leading-5 text-[#875b16]"><b>Referensi prasyarat belum ditemukan:</b> ${diagnostics.unresolved.slice(0,5).map(escapeHTML).join('; ')}${diagnostics.unresolved.length>5?' dan lainnya':''}. Nama mata kuliah diperiksa secara utuh; istilah "dan" dalam nama tidak dipotong.</p>`:''}
    <input id="curriculum_excel" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="hidden" onchange="previewCurriculumExcel(this)">
    <div class="mt-4 flex flex-col gap-2 sm:flex-row"><button onclick="document.getElementById('curriculum_excel').click()" class="rounded-xl bg-p px-4 py-3 text-sm font-bold text-white">${ic('upload_file')} Pilih file Excel</button><button onclick="cfgModal()" class="rounded-xl bg-sc px-4 py-3 text-sm font-bold text-p">${ic('rule')} Aturan Studi</button></div>
    <div id="curriculum-preview" class="mt-4"></div>
