@@ -107,29 +107,61 @@ function tagCourseWithCurriculum(course,semester){
     curriculumCandidateSemesters:[...new Set(matches.map(item=>Number(item.semester)))]
   };
 }
+function allowedSemesterFromCourse(course,matches,fallbackSemester){
+  const note=String(matches.map(item=>item.notes||'').join(' '));
+  const allowed=note.match(/(?:semester|sem)\\s*(\\d+(?:\\s*[/,]\\s*\\d+)*)/i);
+  const values=allowed?allowed[1].split(/[/,]/).map(value=>Number(value.trim())).filter(Number.isInteger):[];
+  if(values.includes(Number(fallbackSemester)))return Number(fallbackSemester);
+  return null;
+}
 function assignKhsSemesters(groups,fallbackSemester,explicitSemester=false){
   if(!Array.isArray(groups))return[];
-  let normalized=groups.map(group=>({n:Number(group.n)||fallbackSemester,c:(group.c||[]).map(course=>({...course}))}));
-  if(!explicitSemester&&normalized.length===1&&CURRICULUM.length){
-    const votes=new Map();
-    let matched=0;
-    for(const course of normalized[0].c){
-      const matches=curriculumMatches(course);
-      if(!matches.length)continue;
-      matched++;
-      const candidates=[...new Set(matches.map(item=>Number(item.semester)))];
-      const preferred=candidates.includes(Number(fallbackSemester))?Number(fallbackSemester):candidates.length===1?candidates[0]:null;
-      if(preferred)votes.set(preferred,(votes.get(preferred)||0)+1);
+  let normalized=groups.map(group=>({n:Number(group.n)||fallbackSemester,c:(group.c||[]).map(course=>({...course})),semesterSource:explicitSemester?'document':'manual-review'}));
+  if(explicitSemester||!CURRICULUM.length||normalized.length!==1)return normalized.map(group=>({...group,c:group.c.map(course=>tagCourseWithCurriculum(course,group.n))}));
+
+  const source=normalized[0].c;
+  const buckets=new Map(),unresolved=[];
+  let recognized=0;
+  for(const course of source){
+    const matches=curriculumMatches(course);
+    if(!matches.length){unresolved.push(course);continue}
+    recognized++;
+    const preferred=matches.find(item=>Number(item.semester)===Number(fallbackSemester));
+    let selected=preferred;
+    if(!selected&&matches.length===1)selected=matches[0];
+    if(!selected){
+      const allowedSemester=allowedSemesterFromCourse(course,matches,fallbackSemester);
+      if(allowedSemester)selected=matches.find(item=>Number(item.semester)===allowedSemester)||null;
     }
-    const ranked=[...votes.entries()].sort((x,y)=>y[1]-x[1]);
-    if(ranked.length&&ranked[0][1]>=Math.max(1,Math.ceil(matched*.5))&&(!ranked[1]||ranked[0][1]>ranked[1][1])){
-      normalized[0].n=ranked[0][0];
-      normalized[0].semesterSource='curriculum-match';
-    }else{
-      normalized[0].semesterSource='manual-review';
-    }
+    if(!selected){unresolved.push({...course,curriculumStatus:'ambiguous'});continue}
+    const semester=Number(selected.semester)||Number(fallbackSemester);
+    if(!buckets.has(semester))buckets.set(semester,[]);
+    buckets.get(semester).push({...course});
   }
-  return normalized.map(group=>({...group,c:group.c.map(course=>tagCourseWithCurriculum(course,group.n))}));
+
+  const matchedCount=[...buckets.values()].reduce((sum,items)=>sum+items.length,0);
+  const confidence=recognized?matchedCount/recognized:0;
+  if(!buckets.size||confidence<0.5){
+    return normalized.map(group=>({
+      ...group,n:Number(fallbackSemester)||group.n,semesterSource:'manual-review',
+      c:group.c.map(course=>tagCourseWithCurriculum(course,Number(fallbackSemester)||group.n))
+    }));
+  }
+
+  const inferred=[...buckets.entries()].sort((x,y)=>x[0]-y[0]).map(([semester,courses])=>({
+    n:semester,
+    semesterSource:'curriculum-match',
+    c:courses.map(course=>tagCourseWithCurriculum(course,semester))
+  }));
+  if(unresolved.length){
+    const fallback=Number(fallbackSemester)||normalized[0].n;
+    inferred.push({
+      n:fallback,
+      semesterSource:'manual-review',
+      c:unresolved.map(course=>tagCourseWithCurriculum(course,fallback))
+    });
+  }
+  return inferred;
 }
 function academicTermForSemester(semester,angkatan){
   if(!angkatan||!Number.isFinite(Number(angkatan)))return null;
