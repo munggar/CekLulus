@@ -137,7 +137,7 @@ function assignKhsSemesters(groups,fallbackSemester,explicitSemester=false){
     }
     if(!selected&&matches.length===1)selected=matches[0];
     if(!selected){unresolved.push({...course,curriculumStatus:'ambiguous'});continue}
-    const semester=Number(selected.semester)||Number(fallbackSemester);
+    const semester=Number(allowedSemester||selected.semester)||Number(fallbackSemester);
     if(!buckets.has(semester))buckets.set(semester,[]);
     buckets.get(semester).push({...course});
   }
@@ -217,7 +217,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   const nextRequired=Math.max(0,...missing.map(item=>item.suggestedSemester));
   const estimatedSemester=orderedHistory.length?Math.max(currentSemester||1,byCredits,nextRequired):null;
   const cohort=Number(angkatan)||null;
-  const dCount=new Set(courses.filter(course=>course.g==='D').map(course=>String(course.curriculumCode||course.code||normalizeCourseKey(course.name)))).size;
+  const dCount=[...bestByKey.values()].filter(course=>course.g==='D').length;
   const practiceCourse=CURRICULUM.find(item=>/^praktik kerja$/i.test(item.name));
   const practice=bestByKey.get(String(practiceCourse?.code||''));
   const thesisConditions={
