@@ -74,10 +74,10 @@ async function loadCurriculum(){
   }
 }
 function normalizeCourseKey(value){
-  return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase()
-    .replace(/^[a-z]{0,5}[-.]?\\d{4,}\\s*/,'')
-    .replace(/\\b\\d{5,}\\b/g,'')
-    .replace(/[^a-z0-9]+/g,' ').trim().replace(/\\s+/g,' ');
+  return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+    .replace(/^[a-z]{0,5}[-.]?\d{4,}\s*/,'')
+    .replace(/\b\d{5,}\b/g,'')
+    .replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
 }
 function curriculumMatches(course){
   if(!CURRICULUM.length)return[];
@@ -112,7 +112,7 @@ function tagCourseWithCurriculum(course,semester){
 }
 function allowedSemesterFromCourse(course,matches,fallbackSemester){
   const note=String(matches.map(item=>item.notes||'').join(' '));
-  const allowed=note.match(/(?:semester|sem)\\s*(\\d+(?:\\s*[/,]\\s*\\d+)*)/i);
+  const allowed=note.match(/(?:semester|sem)\s*(\d+(?:\s*[/,]\s*\d+)*)/i);
   const values=allowed?allowed[1].split(/[/,]/).map(value=>Number(value.trim())).filter(Number.isInteger):[];
   if(values.includes(Number(fallbackSemester)))return Number(fallbackSemester);
   return null;
@@ -185,7 +185,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
     const prior=bestByKey.get(key);
     if(!prior||grade>(G[prior.g]??-1))bestByKey.set(key,course);
   }
-  const required=CURRICULUM.filter(item=>/^wajib\\b/i.test(String(item.notes||''))||/^(praktik kerja|skripsi)$/i.test(String(item.name||'')));
+  const required=CURRICULUM.filter(item=>/^wajib\b/i.test(String(item.notes||''))||/^(praktik kerja|skripsi)$/i.test(String(item.name||'')));
   const completed=required.filter(item=>{
     const record=bestByKey.get(String(item.code||normalizeCourseKey(item.name)));
     return record&&(G[record.g]??-1)>=1;
@@ -229,9 +229,9 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   const thesisReady=Object.values(thesisConditions).every(Boolean);
   const unknownPrerequisites=[...new Set(CURRICULUM
     .map(item=>String(item.prerequisite||'').trim())
-    .filter(value=>value&&!/^tidak ada$/i.test(value)&&!/^telah mengambil/i.test(value)&&!/^\\d/.test(value))
+    .filter(value=>value&&!/^tidak ada$/i.test(value)&&!/^telah mengambil/i.test(value)&&!/^\d/.test(value))
     .filter(value=>{
-      const parts=value.split(/,|\\bdan\\b|\\bor\\b/i).map(part=>normalizeCourseKey(part)).filter(Boolean);
+      const parts=value.split(/,|\bdan\b|\bor\b/i).map(part=>normalizeCourseKey(part)).filter(Boolean);
       return parts.length>0&&parts.some(part=>!CURRICULUM.some(item=>normalizeCourseKey(item.name)===part));
     }))];
   return{
