@@ -525,7 +525,7 @@ function drawUp(n){
       <div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">AMBIGU</div><b class="text-xl text-[#875b16]">${ambiguous}</b></div>
       <div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">TIDAK COCOK</div><b class="text-xl text-ero">${unmatched}</b></div>
     </div>`:''}
-    ${multi?groups.map(group=>`<section class="mt-4"><div class="mb-2 flex flex-wrap items-center justify-between gap-2"><b class="text-sm">Semester ${group.n}</b><span class="text-[10px] text-ov">${group.c.length} mata kuliah</span></div><div class="space-y-2">${group.c.map(courseCard).join('')}</div></section>`).join(''):courses.length?`<div class="mt-3 space-y-2">${courses.map(courseCard).join('')}</div>`:'<p class="mt-2 text-xs text-ov">Belum ada data terbaca. Pilih dokumen KHS untuk memulai.</p>'}
+    ${multi?groups.map((group,index)=>`<section class="mt-4"><div class="mb-2 flex flex-wrap items-center justify-between gap-2"><label class="flex items-center gap-2 text-sm font-bold">Semester <input id="u_n_group_${index}" type="number" min="1" max="14" value="${group.n}" class="w-20 rounded-lg border border-ol bg-white px-2 py-1 font-normal"></label><span class="text-[10px] text-ov">${group.c.length} mata kuliah · ${group.semesterSource==='curriculum-match'?'hasil pencocokan Excel':'perlu diperiksa'}</span></div><div class="space-y-2">${group.c.map(courseCard).join('')}</div></section>`).join(''):courses.length?`<div class="mt-3 space-y-2">${courses.map(courseCard).join('')}</div>`:'<p class="mt-2 text-xs text-ov">Belum ada data terbaca. Pilih dokumen KHS untuk memulai.</p>'}
   </div>
   ${mismatched||ambiguous||unmatched?`<div class="mt-3 rounded-xl bg-[#fff7e6] p-3 text-xs leading-5 text-[#875b16]"><b>Perlu perhatian sebelum menyimpan.</b> Beberapa baris tidak cocok dengan acuan semester, ambigu, atau belum ada di Excel. Sistem mempertahankan data yang dibaca, tetapi tidak menganggapnya otomatis tervalidasi. Periksa kode/nama mata kuliah dan semester.</div>`:''}
   <button onclick="saveKHS()" ${courses.length?'':'disabled'} class="mt-4 w-full rounded-xl bg-p py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Simpan KHS & Buat Analisis Akademik</button>
@@ -822,7 +822,10 @@ async function saveKHS(){
     if(!Number.isInteger(selectedSemester)||selectedSemester<1||selectedSemester>14)return toast('Semester harus antara 1 sampai 14.');
     groups=[{...groups[0],n:selectedSemester,c:(groups[0].c||[]).map(course=>tagCourseWithCurriculum(course,selectedSemester))}];
   }else{
-    groups=groups.map(group=>({...group,c:(group.c||[]).map(course=>tagCourseWithCurriculum(course,group.n))}));
+    groups=groups.map((group,index)=>{
+      const selected=Number(document.getElementById('u_n_group_'+index)?.value||group.n);
+      return {...group,n:selected,c:(group.c||[]).map(course=>tagCourseWithCurriculum(course,selected))};
+    });
   }
   if(!groups.length||groups.some(group=>!Number.isInteger(Number(group.n))||group.n<1||group.n>14||!group.c?.length||group.c.some(course=>!String(course.name||'').trim()||!Number.isInteger(Number(course.sks))||Number(course.sks)<1||!(course.g in G)))){
     return toast('Pastikan semester, nama mata kuliah, SKS, dan nilai valid sebelum menyimpan.');
