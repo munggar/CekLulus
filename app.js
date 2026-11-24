@@ -196,10 +196,20 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   });
   const atRisk=courses.filter(course=>(G[course.g]??-1)<2).map(course=>({name:course.name,grade:course.g,sks:course.sks,semester:course.semester}));
   const totals=agg(history);
+  const creditRecords=new Map();
+  for(const course of courses){
+    if((G[course.g]??-1)<1)continue;
+    const candidates=curriculumMatches(course);
+    const key=String(course.curriculumCode||course.code||(candidates.length===1?candidates[0]?.code:normalizeCourseKey(course.name)));
+    if(!key)continue;
+    const prior=creditRecords.get(key);
+    if(!prior||(G[course.g]??-1)>(G[prior.g]??-1))creditRecords.set(key,course);
+  }
+  const completedSks=[...creditRecords.values()].reduce((sum,course)=>sum+Number(course.sks||0),0);
   const currentSemester=history.reduce((max,item)=>Math.max(max,Number(item.n)||0),0);
   const recent=history.slice(-2).map(item=>sem(item).sks).filter(Number.isFinite);
   const expectedLoad=recent.length?Math.max(12,Math.min(24,recent.reduce((x,y)=>x+y,0)/recent.length)):20;
-  const remainingSks=Math.max(0,CFG.total-totals.sks);
+  const remainingSks=Math.max(0,CFG.total-completedSks);
   const byCredits=currentSemester+Math.ceil(remainingSks/expectedLoad);
   const nextRequired=Math.max(0,...missing.map(item=>item.suggestedSemester));
   const estimatedSemester=Math.max(currentSemester||1,byCredits,nextRequired);
@@ -208,7 +218,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
   const practiceCourse=CURRICULUM.find(item=>/^praktik kerja$/i.test(item.name));
   const practice=bestByKey.get(String(practiceCourse?.code||''));
   const thesisConditions={
-    sks75:totals.sks>=Math.ceil(CFG.total*.75),
+    sks75:completedSks>=Math.ceil(CFG.total*.75),
     ipk:totals.ipk>=2.75,
     maximumD:dCount<=1,
     practice:totals.sks>100&&!!practice&&(G[practice.g]??-1)>=1
@@ -222,7 +232,7 @@ function curriculumAnalysis(history=semesters(),angkatan=USER?.angkatan){
       return parts.length>0&&parts.some(part=>!CURRICULUM.some(item=>normalizeCourseKey(item.name)===part));
     }))];
   return{
-    totalSks:totals.sks,ipk:totals.ipk,currentSemester,remainingSks,expectedLoad,
+    totalSks:completedSks,attemptedSks:totals.sks,ipk:totals.ipk,currentSemester,remainingSks,expectedLoad,
     requiredCount:required.length,completedRequired:completed.length,missing,
     atRisk,estimatedSemester,estimatedTerm:academicTermForSemester(estimatedSemester,cohort),
     cohort,thesisConditions,thesisReady,unknownPrerequisites,
