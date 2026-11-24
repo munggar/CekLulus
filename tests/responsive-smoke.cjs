@@ -96,7 +96,7 @@ async function main() {
     assert.equal(graduationCheck.thesisConditions.maximumD, true, 'A retaken D improved to B should not remain an outstanding D for thesis checks.');
     assert.ok(graduationCheck.estimatedTerm, 'An existing KHS and cohort should produce an estimated academic completion term.');
 
-    const widths = [320, 360, 375, 414, 768, 1024, 1280, 1440, 1920];
+    const widths = [320, 360, 375, 390, 414, 768, 1024, 1280, 1440, 1657, 1920];
     const tabs = ['chat', 'ringkasan', 'matkul', 'simulasi', 'riwayat'];
     const results = [];
 
@@ -115,7 +115,7 @@ async function main() {
           const heroHeading = hero?.querySelector('.lulu-hero-heading');
           const heroCopy = hero?.querySelector('.lulu-hero-copy');
           const heroStats = hero?.querySelector('.lulu-hero-stats');
-          const boxes = [heroHeading,heroCopy,heroStats,...(hero?.querySelectorAll('.lulu-hero-stat')||[])].filter(Boolean);
+          const boxes = [heroHeading,heroCopy,...(hero?.querySelectorAll('.lulu-hero-stat')||[])].filter(Boolean);
           const rects = boxes.map(el=>({name:el.className,left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right,top:el.getBoundingClientRect().top,bottom:el.getBoundingClientRect().bottom,width:el.getBoundingClientRect().width}));
           let heroOverlap=false;
           for(let x=0;x<rects.length;x++)for(let y=x+1;y<rects.length;y++){
