@@ -55,7 +55,7 @@ const asd=()=>{for(const s of st.sems)for(const c of s.c)if(G[c.g]<2&&/Algoritma
 // ---------- util UI ----------
 const ic=n=>`<span class="ms">${n}</span>`;
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.add('hidden'),2200)}
-function modal(h){$('#modal').innerHTML=`<div class="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeM()"><div class="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-3xl p-5 max-h-[88vh] overflow-y-auto">${h}</div></div>`}
+function modal(h){$('#modal').innerHTML=`<div class="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeM()"><div class="bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 max-h-[88vh] overflow-y-auto">${h}</div></div>`}
 const closeM=()=>$('#modal').innerHTML='';
 const go=t=>{tab=t;render();scrollTo(0,0)};
 const chip=(t,c)=>`<span class="text-[11px] font-bold px-2.5 py-1 rounded-full ${c}">${t}</span>`;
@@ -297,7 +297,7 @@ function vSimulasi(){
  const s=st.sim,n=latestSem()+1,P=project(s.sks,s.ips,s.sp),a=agg(),sim=P.done-a.sks,left=Math.max(0,CFG.total-P.done),
   cards=[['AKSELERASI','bg-erc text-ero',7,'Butuh IPS rata-rata 3.75 di Sem '+n+' & ambil 24 SKS.',project(24,3.75,false).pOn],['STANDAR UTAMA','bg-white text-p',8,'Ambil 18–20 SKS Sem '+n+' (IPS 3.50) & skripsi fokus Sem '+(n+1)+'.',project(20,3.5,false).pOn]];
  return`<div class="mt-3"><span class="bg-sec text-se text-[11px] font-bold rounded-full px-3 py-1.5">${ic('insights')} ALGORITMA PREDIKSI KHS</span></div>
- <h1 class="text-[30px] leading-9 font-extrabold text-p mt-3">Simulasi Prediktor IPK & Kelulusan</h1><p class="text-sm text-ov mt-2">Atur rencana SKS dan target nilai semester mendatang untuk melihat estimasi waktu lulus dan IPK akhirmu.</p>
+ <h1 class="mt-3 break-words text-2xl font-extrabold leading-tight text-p sm:text-[30px]">Simulasi Prediktor IPK & Kelulusan</h1><p class="text-sm text-ov mt-2">Atur rencana SKS dan target nilai semester mendatang untuk melihat estimasi waktu lulus dan IPK akhirmu.</p>
  <div class="flex justify-between mt-5 text-[11px] font-bold tracking-wider text-ov"><span>PILIHAN JALUR REKOMENDASI</span><button onclick="setS(${cards[1][2]===8?20:20},3.5,false)" class="text-se">${ic('touch_app')} Ketuk skenario</button></div>
  <div class="flex gap-3 overflow-x-auto mt-2 pb-1">${cards.map((c,i)=>`<button onclick="setS(${i?20:24},${i?3.5:3.75},false)" class="shrink-0 w-64 text-left rounded-2xl p-4 ${i?'bg-sec':'bg-sc'}"><span class="text-[10px] font-bold rounded-full px-2.5 py-1 ${c[1]}">${c[0]}</span><div class="text-2xl font-extrabold mt-3">${c[2]} Semester</div><div class="text-xs text-ov mt-1 h-8">${c[3]}</div><div class="bg-white/70 rounded-lg px-3 py-2 mt-3 flex justify-between text-xs font-bold"><span>PROBABILITAS</span><span>${c[4]}%</span></div></button>`).join('')}</div>
  <div class="bg-white rounded-3xl p-5 mt-4 shadow-sm"><div class="flex justify-between items-center"><div class="font-bold text-lg">${ic('tune')} Parameter Studi<div class="text-xs font-normal text-ov">Semester ${n} ${n%2?'Ganjil':'Genap'} 2026/2027</div></div><button onclick="setS(20,3.5,false)" class="text-se font-semibold text-sm">${ic('refresh')} Reset</button></div>
@@ -488,10 +488,10 @@ function fallbackReply(t){
 }
 function vRiwayat(){
  const history=semesters(),a=agg(history),n=latestSem(),avg=history.length?history.reduce((x,s)=>x+sem(s).ips,0)/history.length:0;
- return`<div class="flex justify-between items-start mt-3 gap-3"><div><div class="text-[10px] font-bold tracking-wider text-ov">ARSIP AKADEMIK</div><h1 class="text-[28px] leading-8 font-extrabold text-p mt-1">Riwayat Studi & Dokumen KHS</h1></div><button onclick="upModal()" class="bg-p text-white rounded-xl px-4 py-3 font-bold text-sm shrink-0">${ic('upload_file')} Upload KHS</button></div>
+ return`<div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><div class="text-[10px] font-bold tracking-wider text-ov">ARSIP AKADEMIK</div><h1 class="mt-1 break-words text-2xl font-extrabold leading-tight text-p sm:text-[28px]">Riwayat Studi & Dokumen KHS</h1></div><button onclick="upModal()" class="w-full shrink-0 rounded-xl bg-p px-4 py-3 text-sm font-bold text-white sm:w-auto">${ic('upload_file')} Upload KHS</button></div>
  <p class="text-sm text-ov mt-2">Rekapitulasi transkrip per semester untuk audit kelulusan dan validasi prediktor IPK.</p>
  <div class="bg-sch rounded-3xl p-5 mt-4"><div class="flex justify-between items-center">${chip('● AUDIT PROGRES AKTIF','bg-sec text-se')}<b class="text-sm">Fase Akhir (${Math.round(a.sks/CFG.total*100)}%)</b></div>
- <div class="grid grid-cols-3 mt-4 text-center"><div class="text-left"><div class="text-[10px] font-bold text-ov">SELESAI</div><div class="text-4xl font-extrabold">${n}</div><small>Semester</small></div><div class="text-left"><div class="text-[10px] font-bold text-ov">KREDIT LULUS</div><div class="text-4xl font-extrabold">${a.sks}</div><small>SKS Sah</small></div><div class="text-left"><div class="text-[10px] font-bold text-ov">RATA-RATA IPS</div><div class="text-4xl font-extrabold">${f(avg)}</div><small>Kumulatif</small></div></div></div>
+ <div class="grid grid-cols-1 gap-3 mt-4 text-center min-[380px]:grid-cols-3"><div class="text-left"><div class="text-[10px] font-bold text-ov">SELESAI</div><div class="text-4xl font-extrabold">${n}</div><small>Semester</small></div><div class="text-left"><div class="text-[10px] font-bold text-ov">KREDIT LULUS</div><div class="text-4xl font-extrabold">${a.sks}</div><small>SKS Sah</small></div><div class="text-left"><div class="text-[10px] font-bold text-ov">RATA-RATA IPS</div><div class="text-4xl font-extrabold">${f(avg)}</div><small>Kumulatif</small></div></div></div>
  <div class="bg-sec/60 rounded-2xl p-4 mt-4 flex gap-3 items-center"><div class="w-11 h-11 rounded-xl bg-sec grid place-items-center">${ic('workspace_premium')}</div><div class="text-sm"><b>Kandidat Predikat ${pred(a.ipk)}</b><br>Pertahankan rata-rata IPS ≥ ${f(Math.max(3,a.ipk-.06))} di ${Math.max(0,8-n)} semester sisa.</div></div>
  <div class="flex justify-between mt-6 mb-2"><b class="text-lg">Daftar Semester</b><span class="text-[11px] font-bold text-se">TERBARU KE LAMA</span></div>
  ${[...history].reverse().map(s=>{const m=sem(s),bad=s.c.filter(c=>G[c.g]<2),o=open===s.n;
@@ -1081,7 +1081,7 @@ function vAdmin(){
 function render(keep){const localFileWarning=location.protocol==='file:'?'<div class="bg-erc text-ero rounded-2xl p-3 mt-3 text-xs"><b>Penyimpanan browser tidak stabil.</b> Jangan buka index.html langsung. Jalankan <code>npm --prefix server start</code>, lalu buka <code>http://localhost:3001</code> dengan browser yang sama setiap kali.</div>':'';if(USER?.role==='admin'){$('#nav').innerHTML='';$('#app').innerHTML=localFileWarning+'<div class="max-w-2xl mx-auto">'+vAdmin()+'</div>';return}
  $('#nav').innerHTML=TABS.map(t=>`<button onclick="go('${t[0]}')" class="flex min-w-0 flex-col items-center gap-0.5 px-2 py-1.5 text-[10px] font-bold tracking-wide ${tab===t[0]?'text-p':'text-ov'}"><span class="ms ${tab===t[0]?'fill':''}">${t[1]}</span>${t[2]}</button>`).join('');
  const content={ringkasan:vRingkasan,matkul:vMatkul,simulasi:vSimulasi,chat:vChat,riwayat:vRiwayat}[tab]();
- $('#app').innerHTML=localFileWarning+(tab==='chat'?content:'<div class="max-w-2xl mx-auto">'+content+'</div>');
+ $('#app').innerHTML=localFileWarning+(tab==='chat'?content:'<div class="max-w-4xl mx-auto">'+content+'</div>');
  if(keep){const e=$('#q');if(e){e.focus();e.setSelectionRange(q.length,q.length)}}}
 // ---------- autentikasi dan data tersimpan di backend ----------
 let USER=null,NAME='Alya',mode='login',authErr='',role='student';
