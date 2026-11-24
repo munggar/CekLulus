@@ -952,7 +952,7 @@ function vAuth(){const reg=mode==='register',inp=(id,ic_,ph,t='text',x='')=>`<la
  <p class="text-sm text-ov mt-2">${reg?'Daftar untuk menyimpan KHS dan rencana studimu dengan aman.':'Masuk untuk melihat peluang lulusmu dan rencana semester depan.'}</p>
  <div class="bg-sc rounded-2xl p-1 grid grid-cols-2 mt-6 text-sm font-bold"><button onclick="selectRole('student')" class="rounded-xl py-2.5 ${role==='student'?'bg-white shadow text-p':'text-ov'}">Mahasiswa</button><button onclick="selectRole('admin')" class="rounded-xl py-2.5 ${role==='admin'?'bg-white shadow text-p':'text-ov'}">Admin</button></div>
  ${role==='student'?`<div class="bg-sc rounded-2xl p-1 grid grid-cols-2 mt-4 text-sm font-bold"><button onclick="mode='login';authErr='';render()" class="rounded-xl py-2.5 ${!reg?'bg-white shadow text-p':'text-ov'}">Masuk</button><button onclick="mode='register';authErr='';render()" class="rounded-xl py-2.5 ${reg?'bg-white shadow text-p':'text-ov'}">Daftar</button></div>`:''}
- <div class="space-y-3 mt-5">${reg?inp('a_name','person','Nama lengkap'):''}${inp('a_id','badge',role==='admin'?'ID admin':reg?'NIM':'NIM atau email','text','autocomplete="username"')}${reg?inp('a_prodi','apartment','Program studi (opsional)'):''}${inp('a_pw','lock','Kata sandi','password','autocomplete="'+(reg?'new':'current')+'-password"')}${reg?inp('a_pw2','lock_reset','Ulangi kata sandi','password'):''}</div>
+ <div class="space-y-3 mt-5">${reg?inp('a_name','person','Nama lengkap'):''}${inp('a_id','badge',role==='admin'?'ID admin':reg?'NIM':'NIM atau email','text','autocomplete="username"')}${reg?inp('a_prodi','apartment','Program studi (opsional)'):''}${reg?inp('a_angkatan','calendar_month','Tahun angkatan (opsional, mis. 2023)','number',`min="2000" max="${new Date().getFullYear()}" inputmode="numeric"`):''}${inp('a_pw','lock','Kata sandi','password','autocomplete="'+(reg?'new':'current')+'-password"')}${reg?inp('a_pw2','lock_reset','Ulangi kata sandi','password'):''}</div>
  ${authErr?`<div class="bg-erc text-ero rounded-xl px-4 py-3 text-sm mt-3">${ic('error')} ${authErr}</div>`:''}
  ${!reg?`<div class="flex justify-between items-center mt-4 text-sm"><label class="flex items-center gap-2"><input id="a_rem" type="checkbox" checked class="w-4 h-4 accent-[#002820]">Ingat sesi di perangkat ini</label><button onclick="forgot()" class="font-semibold text-se">Lupa sandi?</button></div>`:''}
  <button onclick="doAuth()" class="w-full mt-5 bg-p text-white rounded-2xl py-4 font-bold shadow-lg">${reg?'Daftar & Mulai':'Masuk'} ${ic('arrow_forward')}</button>
@@ -989,6 +989,7 @@ function setUser(response,remember=true){
  $('#av').textContent=NAME[0].toUpperCase();
  if(USER.role==='admin')api('/api/admin/students').then(result=>{ADMIN_STUDENTS=result.students;render()}).catch(error=>{console.error('Gagal memuat daftar mahasiswa.',error);toast('Data mahasiswa gagal dimuat: '+error.message)});
  boot();
+ loadCurriculum();
 }
 async function doAuth(){
  const g=i=>($('#'+i)?.value||'').trim(),id=g('a_id'),password=$('#a_pw').value;
@@ -996,12 +997,13 @@ async function doAuth(){
  if(!id||!password){authErr='Isi NIM/email dan kata sandi.';return render()}
  try{
   if(mode==='register'&&role==='student'){
-   const name=g('a_name'),password2=$('#a_pw2').value;
+   const name=g('a_name'),password2=$('#a_pw2').value,angkatan=g('a_angkatan');
    if(name.length<2)authErr='Nama lengkap minimal 2 karakter.';
    else if(password.length<8)authErr='Kata sandi minimal 8 karakter.';
    else if(password!==password2)authErr='Kata sandi tidak sama.';
+   else if(angkatan&&(!Number.isInteger(+angkatan)||+angkatan<2000||+angkatan>new Date().getFullYear()))authErr='Tahun angkatan tidak valid.';
    if(authErr)return render();
-   return setUser(await api('/api/auth/register',{method:'POST',body:{id,name,prodi:g('a_prodi'),password}}),true);
+   return setUser(await api('/api/auth/register',{method:'POST',body:{id,name,prodi:g('a_prodi'),angkatan:angkatan||null,password}}),true);
   }
   try{return setUser(await api('/api/auth/login',{method:'POST',body:{id,password}}),$('#a_rem')?.checked!==false)}
   catch(error){
@@ -1015,8 +1017,8 @@ async function doAuth(){
 }
 async function guest(){try{setUser(await api('/api/auth/guest',{method:'POST',body:{}}),true)}catch(error){toast('Mode tamu gagal dibuat: '+error.message)}}
 function forgot(){modal(`<b class="text-xl">Lupa kata sandi</b><p class="text-sm text-ov mt-2">Akun dan data akademik tersimpan di database. Hubungi administrator aplikasi untuk meminta pengaturan ulang kata sandi.</p><button onclick="closeM()" class="w-full mt-4 bg-p text-white rounded-xl py-3 font-bold">Tutup</button>`)}
-function profile(){modal(`<div class="flex items-center gap-3"><div class="w-14 h-14 rounded-full bg-sec text-p text-2xl font-bold grid place-items-center">${escapeHTML(NAME[0])}</div><div><b class="text-lg">${escapeHTML(USER.name)}</b><div class="text-xs text-ov">${USER.role==='admin'?'Role: Admin':'Role: Mahasiswa'}${USER.guest?' · Mode tamu':' · '+escapeHTML(USER.id||'')}${USER.prodi?'<br>'+escapeHTML(USER.prodi):''}</div></div></div><button onclick="logout()" class="w-full mt-5 bg-p text-white rounded-xl py-3 font-bold">${ic('logout')} Keluar</button><button onclick="closeM()" class="w-full mt-2 bg-sc rounded-xl py-3 font-bold">Tutup</button>`)}
-function logout(){try{localStorage.removeItem('ceklulus_token');sessionStorage.removeItem('ceklulus_token')}catch(error){console.error('Gagal membersihkan kredensial sesi.',error)}AUTH_TOKEN='';USER=null;role='student';mode='login';st=seed();closeM();boot()}
+function profile(){modal(`<div class="flex items-center gap-3"><div class="w-14 h-14 rounded-full bg-sec text-p text-2xl font-bold grid place-items-center">${escapeHTML(NAME[0])}</div><div><b class="text-lg">${escapeHTML(USER.name)}</b><div class="text-xs text-ov">${USER.role==='admin'?'Role: Admin':'Role: Mahasiswa'}${USER.guest?' · Mode tamu':' · '+escapeHTML(USER.id||'')}${USER.prodi?'<br>'+escapeHTML(USER.prodi):''}${USER.angkatan?'<br>Angkatan: '+escapeHTML(USER.angkatan):''}</div></div></div><button onclick="logout()" class="w-full mt-5 bg-p text-white rounded-xl py-3 font-bold">${ic('logout')} Keluar</button><button onclick="closeM()" class="w-full mt-2 bg-sc rounded-xl py-3 font-bold">Tutup</button>`)}
+function logout(){try{localStorage.removeItem('ceklulus_token');sessionStorage.removeItem('ceklulus_token')}catch(error){console.error('Gagal membersihkan kredensial sesi.',error)}AUTH_TOKEN='';USER=null;CURRICULUM=[];CURRICULUM_META=null;role='student';mode='login';st=seed();closeM();boot()}
 function boot(){if(!USER){shell(false);$('#auth').innerHTML=vAuth();return}role=USER.role;NAME=first(USER.name);shell(true);$('#av').textContent=NAME[0].toUpperCase();render()}
 async function restoreSession(){
  if(!AUTH_TOKEN)return boot();
