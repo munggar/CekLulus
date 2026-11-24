@@ -1,8 +1,6 @@
 const G={'A+':4,A:4,'A-':3.75,'B+':3.25,B:3,'B-':2.75,'C+':2.25,C:2,'C-':1.75,D:1,E:0},GR=Object.keys(G);
 const $=s=>document.querySelector(s),f=(x,d=2)=>Number(x).toFixed(d).replace('.',',');
-const mk=(n,a)=>({n,c:a.map(r=>({name:r[0],sks:r[1],g:r[2],t:r[3]}))});
-const seed=()=>({cfg:{total:144,maxSem:14,minIpk:2},sim:{sks:20,ips:3.5,sp:false},plan:null,chat:[],sems:[
-mk(1,[['Kalkulus',4,'A-','W'],['Pemrograman Dasar',3,'B+','W'],['Bahasa Inggris',2,'A','W']])]});
+const seed=()=>({cfg:{total:144,maxSem:14,minIpk:2},sim:{sks:20,ips:3.5,sp:false},plan:null,chat:[],sems:[]});
 let st=seed();
 let AUTH_TOKEN=localStorage.getItem('ceklulus_token')||sessionStorage.getItem('ceklulus_token')||'';
 const api=async(url,options={})=>{
@@ -1103,7 +1101,7 @@ function vAuth(){const reg=mode==='register',inp=(id,ic_,ph,t='text',x='')=>`<la
  <h1 class="text-[34px] leading-10 font-extrabold tracking-tight text-p mt-1">${reg?'Buat akun CekLulus':'Selamat datang kembali.'}</h1>
  <p class="text-sm text-ov mt-2">${reg?'Daftar untuk menyimpan KHS dan rencana studimu dengan aman.':'Masuk untuk melihat peluang lulusmu dan rencana semester depan.'}</p>
  <div class="bg-sc rounded-2xl p-1 grid grid-cols-2 mt-6 text-sm font-bold"><button onclick="selectRole('student')" class="rounded-xl py-2.5 ${role==='student'?'bg-white shadow text-p':'text-ov'}">Mahasiswa</button><button onclick="selectRole('admin')" class="rounded-xl py-2.5 ${role==='admin'?'bg-white shadow text-p':'text-ov'}">Admin</button></div>
- ${role==='student'?`<div class="bg-sc rounded-2xl p-1 grid grid-cols-2 mt-4 text-sm font-bold"><button onclick="mode='login';authErr='';render()" class="rounded-xl py-2.5 ${!reg?'bg-white shadow text-p':'text-ov'}">Masuk</button><button onclick="mode='register';authErr='';render()" class="rounded-xl py-2.5 ${reg?'bg-white shadow text-p':'text-ov'}">Daftar</button></div>`:''}
+
  <div class="space-y-3 mt-5">${reg?inp('a_name','person','Nama lengkap'):''}${inp('a_id','badge',role==='admin'?'ID admin':reg?'NIM':'NIM atau email','text','autocomplete="username"')}${reg?inp('a_prodi','apartment','Program studi (opsional)'):''}${reg?inp('a_angkatan','calendar_month','Tahun angkatan (opsional, mis. 2023)','number',`min="2000" max="${new Date().getFullYear()}" inputmode="numeric"`):''}${inp('a_pw','lock','Kata sandi','password','autocomplete="'+(reg?'new':'current')+'-password"')}${reg?inp('a_pw2','lock_reset','Ulangi kata sandi','password'):''}</div>
  ${authErr?`<div class="bg-erc text-ero rounded-xl px-4 py-3 text-sm mt-3">${ic('error')} ${authErr}</div>`:''}
  ${!reg?`<div class="flex justify-between items-center mt-4 text-sm"><label class="flex items-center gap-2"><input id="a_rem" type="checkbox" checked class="w-4 h-4 accent-[#002820]">Ingat sesi di perangkat ini</label><button onclick="forgot()" class="font-semibold text-se">Lupa sandi?</button></div>`:''}
@@ -1167,7 +1165,6 @@ async function doAuth(){
   }
  }catch(error){authErr=error.message;render()}
 }
-async function guest(){try{setUser(await api('/api/auth/guest',{method:'POST',body:{}}),true)}catch(error){toast('Mode tamu gagal dibuat: '+error.message)}}
 function forgot(){modal(`<b class="text-xl">Lupa kata sandi</b><p class="text-sm text-ov mt-2">Akun dan data akademik tersimpan di database. Hubungi administrator aplikasi untuk meminta pengaturan ulang kata sandi.</p><button onclick="closeM()" class="w-full mt-4 bg-p text-white rounded-xl py-3 font-bold">Tutup</button>`)}
 function profile(){modal(`<div class="flex items-center gap-3"><div class="w-14 h-14 rounded-full bg-sec text-p text-2xl font-bold grid place-items-center">${escapeHTML(NAME[0])}</div><div><b class="text-lg">${escapeHTML(USER.name)}</b><div class="text-xs text-ov">${USER.role==='admin'?'Role: Admin':'Role: Mahasiswa'}${USER.guest?' · Mode tamu':' · '+escapeHTML(USER.id||'')}${USER.prodi?'<br>'+escapeHTML(USER.prodi):''}${USER.angkatan?'<br>Angkatan: '+escapeHTML(USER.angkatan):''}</div></div></div><button onclick="logout()" class="w-full mt-5 bg-p text-white rounded-xl py-3 font-bold">${ic('logout')} Keluar</button><button onclick="closeM()" class="w-full mt-2 bg-sc rounded-xl py-3 font-bold">Tutup</button>`)}
 function logout(){try{localStorage.removeItem('ceklulus_token');sessionStorage.removeItem('ceklulus_token')}catch(error){console.error('Gagal membersihkan kredensial sesi.',error)}AUTH_TOKEN='';USER=null;CURRICULUM=[];CURRICULUM_META=null;role='student';mode='login';st=seed();closeM();boot()}
