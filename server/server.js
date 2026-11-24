@@ -698,29 +698,70 @@ app.post('/api/khs/parse', upload.single('file'), async (req, res) => {
   }
 });
 
-app.post('/api/ai/chat', async (req, res) => {
-  const { message = '', student = {} } = req.body || {};
+app.post('/api/ai/chat', authRequired, async (req, res) => {
+  const { message = '' } = req.body || {};
 
+  if (req.user.role !== 'student') {
+    return res.status(403).json({ error: 'Konsultasi Lulu hanya tersedia untuk akun mahasiswa.' });
+  }
   if (!message || !String(message).trim()) {
     return res.status(400).json({ error: 'Pertanyaan tidak boleh kosong.' });
   }
+  if (String(message).length > 4000) {
+    return res.status(400).json({ error: 'Pertanyaan terlalu panjang. Maksimal 4.000 karakter.' });
+  }
 
   if (!groq) {
-    return res.status(503).json({ error: 'GROQ_API_KEY belum dikonfigurasi di file .env.' });
+    return res.status(503).json({ error: 'GROQ_API_KEY belum dikonfigurasi di Render.' });
   }
 
   try {
+    // Use records from the authenticated account. Do not trust client-submitted
+    // student IDs, grades, cohort values, or curriculum context.
+    const [dataResult, settingsResult, curriculumResult] = await Promise.all([
+      pool.query('SELECT state FROM student_data WHERE user_id = $1', [req.user.id]),
+      pool.query("SELECT value FROM app_settings WHERE key = 'study_rules'"),
+      pool.query("SELECT value FROM app_settings WHERE key = 'curriculum'")
+    ]);
+    const state = dataResult.rows[0]?.state || initialStudentData(req.user.guest);
+    const curriculum = curriculumResult.rows[0]?.value || { courses: [] };
+    const student = {
+      name: req.user.name || 'Mahasiswa',
+      id: req.user.id,
+      role: req.user.role,
+      prodi: req.user.prodi || '',
+      angkatan: req.user.angkatan ? Number(req.user.angkatan) : null,
+      cfg: settingsResult.rows[0]?.value || DEFAULT_SETTINGS,
+      khs: {
+        semesters: (Array.isArray(state.sems) ? state.sems : []).map(group => ({
+          semester: Number(group.n) || null,
+          courses: (Array.isArray(group.c) ? group.c : []).map(course => ({
+            name: String(course.name || ''),
+            code: String(course.curriculumCode || course.code || ''),
+            sks: Number(course.sks) || 0,
+            grade: String(course.g || ''),
+            curriculumStatus: course.curriculumStatus || 'unknown',
+            curriculumSemester: course.curriculumSemester || null,
+            prerequisite: course.curriculumPrerequisite || ''
+          }))
+        }))
+      },
+      curriculum: Array.isArray(curriculum.courses) ? curriculum.courses : []
+    };
     const summary = summarizeStudent(student);
-    const prompt = `Data KHS mahasiswa:\n${JSON.stringify({
-      name: student.name || 'Mahasiswa',
-      id: student.id || 'guest',
-      role: student.role || 'student',
-      cfg: student.cfg || {},
-      khs: student.khs || { semesters: [] },
-      curriculum: student.curriculum || [],
-      angkatan: student.angkatan || null,
+    const prompt = `Data akademik dari akun yang sedang masuk (bersumber dari database server):
+${JSON.stringify({
+      name: student.name,
+      id: student.id,
+      prodi: student.prodi,
+      angkatan: student.angkatan,
+      cfg: student.cfg,
+      khs: student.khs,
+      curriculum: student.curriculum,
       summary
-    }, null, 2)}\n\nPertanyaan: ${message}`;
+    }, null, 2)}
+
+Pertanyaan: ${message}`;
 
     const primaryModel = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
     const fallbackModel = process.env.GROQ_FALLBACK_MODEL || 'qwen/qwen3.8-27b';
