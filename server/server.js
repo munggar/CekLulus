@@ -664,10 +664,30 @@ app.post('/api/admin/curriculum', authRequired, adminRequired, async (req, res, 
     });
   }
 
-  const duplicateCodes = Object.entries(courses.reduce((map, course) => {
-    if (course.code) map[course.code] = (map[course.code] || 0) + 1;
-    return map;
-  }, {})).filter(([, count]) => count > 1).map(([code]) => code);
+  const codeGroups = new Map();
+  for (const course of courses) {
+    if (!course.code) continue;
+    if (!codeGroups.has(course.code)) codeGroups.set(course.code, []);
+    codeGroups.get(course.code).push(course);
+  }
+  const duplicateCodes = [];
+  const multiSemesterCodes = [];
+  const normalizeCourseName = value => String(value || '').normalize('NFD')
+    .replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const allowedSemestersFromNotes = notes => {
+    const match = String(notes || '').match(/(?:semester|sem)\\s*(\\d+(?:\\s*(?:\\/|,|dan)\\s*\\d+)*)/i);
+    return match ? [...new Set((match[1].match(/\\d+/g) || []).map(Number).filter(value => value >= 1 && value <= 14))] : [];
+  };
+  for (const [code, items] of codeGroups) {
+    if (items.length < 2) continue;
+    const sameCourse = items.every(item =>
+      normalizeCourseName(item.name) === normalizeCourseName(items[0].name) &&
+      Number(item.sks) === Number(items[0].sks)
+    );
+    const allowedOfferings = items.every(item => allowedSemestersFromNotes(item.notes).length >= 2);
+    if (sameCourse && allowedOfferings) multiSemesterCodes.push(code);
+    else duplicateCodes.push(code);
+  }
 
   const curriculum = {
     meta: {
@@ -679,7 +699,8 @@ app.post('/api/admin/curriculum', authRequired, adminRequired, async (req, res, 
       importedBy: req.user.id,
       courseCount: courses.length,
       semesterCount: new Set(courses.map(course => course.semester)).size,
-      duplicateCodes
+      duplicateCodes,
+      multiSemesterCodes
     },
     courses
   };
