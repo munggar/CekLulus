@@ -717,6 +717,8 @@ app.post('/api/ai/chat', async (req, res) => {
       role: student.role || 'student',
       cfg: student.cfg || {},
       khs: student.khs || { semesters: [] },
+      curriculum: student.curriculum || [],
+      angkatan: student.angkatan || null,
       summary
     }, null, 2)}\n\nPertanyaan: ${message}`;
 
@@ -732,7 +734,7 @@ app.post('/api/ai/chat', async (req, res) => {
           temperature: 0.2,
           max_tokens: 300,
           messages: [
-            { role: 'system', content: 'Kamu Lulu, asisten akademik CekLulus. Jawab dalam Bahasa Indonesia dengan ramah, langsung, dan ringkas seperti chatbot umum. Jawab inti pertanyaan saja, biasanya 1-3 kalimat; gunakan daftar hanya bila membantu. Beri rincian lebih panjang hanya jika diminta. Gunakan data mahasiswa yang diberikan, jangan mengarang fakta atau hasil hitungan. Jika data penting belum tersedia, katakan singkat apa yang kurang dan ajukan satu pertanyaan klarifikasi.' },
+            { role: 'system', content: 'Kamu Lulu, penasihat akademik personal CekLulus. Jawab dalam Bahasa Indonesia dengan ramah, jelas, terstruktur, dan praktis. Gunakan data KHS, hasil pencocokan kurikulum Excel, ringkasan progres, angkatan, dan prasyarat yang disertakan pada konteks mahasiswa. Bila ditanya kapan lulus, berikan estimasi semester dan tahun akademik hanya bila angkatan tersedia; jelaskan asumsi beban SKS dan mata kuliah wajib yang belum tuntas. Jangan menyebut estimasi sebagai keputusan resmi. Bila prasyarat pada Excel tidak dapat dicocokkan atau ada kode/nama duplikat, nyatakan keterbatasan itu dan jangan menebak. Bedakan data yang benar-benar tercatat dengan rekomendasi. Jangan mengarang kebijakan kampus, dosen, jadwal, nilai, atau kelulusan. Bila data penting tidak tersedia, katakan apa yang kurang dan ajukan satu pertanyaan klarifikasi. Jawab inti pertanyaan 1–5 kalimat; gunakan daftar atau langkah bila membantu.' },
             { role: 'user', content: prompt }
           ]
         });
