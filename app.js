@@ -451,19 +451,48 @@ function upModal(no){const n=no||latestSem()+1,ex=semesterAt(n);draft=ex?ex.c.ma
 function drawUp(n){
   const multi=draftSemesters?.length>1;
   const groups=multi?draftSemesters:[];
-  modal(`<b class="text-xl">${multi?'Tambah beberapa semester':semesterAt(n)?'Ubah':'Tambah'} KHS</b>
-  <p class="text-xs text-ov mt-1">Upload file KHS PDF saja. Sistem akan membaca data mata kuliah dan nilai secara otomatis.</p>
-  ${multi?'<p class="text-xs text-se mt-2">Beberapa semester terdeteksi. Periksa pembagian di bawah; sistem akan menyimpannya ke semester masing-masing.</p>':''}
-  ${multi?'':`<label class="block mt-3 text-sm font-semibold">Semester<input id="u_n" type="number" min="1" max="14" value="${n}" class="w-full bg-sc rounded-xl px-4 py-3 mt-1 font-normal"></label>`}
-  <label class="mt-3 flex items-center gap-2 bg-sc rounded-xl px-4 py-3 text-sm cursor-pointer">${ic('attach_file')}<span id="u_f" class="truncate">${draftFileName||'Pilih KHS PDF'}</span><input type="file" accept="application/pdf,.pdf" class="hidden" onchange="pv(this)"></label>
+  const singleGroup=multi?null:draftSemesters?.[0]||{n,c:draft};
+  const courses=multi?groups.flatMap(group=>group.c||[]):singleGroup?.c||[];
+  const matched=courses.filter(course=>course.curriculumStatus==='matched').length;
+  const mismatched=courses.filter(course=>course.curriculumStatus==='semester-mismatch').length;
+  const ambiguous=courses.filter(course=>course.curriculumStatus==='ambiguous').length;
+  const unmatched=courses.filter(course=>!course.curriculumStatus||['unmatched','not-configured'].includes(course.curriculumStatus)).length;
+  const courseCard=course=>{
+    const status=course.curriculumStatus;
+    const state=status==='matched'?['Cocok dengan kurikulum','bg-sec text-se']
+      :status==='semester-mismatch'?['Semester berbeda dari Excel','bg-[#fff0d9] text-[#875b16]']
+      :status==='ambiguous'?['Pencocokan ambigu','bg-[#fff0d9] text-[#875b16]']
+      :['Tidak ditemukan di Excel','bg-erc text-ero'];
+    return `<div class="rounded-xl bg-white p-3 text-sm">
+      <div class="flex flex-wrap items-start justify-between gap-2"><b class="min-w-0 break-words">${escapeHTML(course.name)}</b><span class="shrink-0 rounded-lg px-2 py-1 font-bold ${gcol(course.g)}">${escapeHTML(course.g)}</span></div>
+      <div class="mt-1 text-xs text-ov">${course.sks} SKS · ${course.curriculumCode||course.code?'Kode '+escapeHTML(course.curriculumCode||course.code):'Kode tidak terbaca'} · ${escapeHTML(course.curriculumCategory||'Kategori belum dipetakan')}</div>
+      <div class="mt-2 inline-flex max-w-full rounded-full px-2.5 py-1 text-[10px] font-bold ${state[1]}">${state[0]}</div>
+      ${course.curriculumSemester?`<div class="mt-1 text-[10px] text-ov">Semester acuan Excel: ${course.curriculumSemester}</div>`:''}
+      ${course.curriculumPrerequisite&&!/^tidak ada$/i.test(course.curriculumPrerequisite)?`<div class="mt-2 break-words text-[11px] leading-4 text-ov">Prasyarat acuan: ${escapeHTML(course.curriculumPrerequisite)}</div>`:''}
+    </div>`;
+  };
+  const semesterLabel=draftSemesterSource==='curriculum-match'
+    ?'Semester hasil pencocokan Excel — mohon periksa kembali'
+    :draftExplicitSemester?'Semester terdeteksi dari dokumen KHS':'Semester KHS — pilih atau koreksi jika diperlukan';
+  modal(`<div class="flex flex-wrap items-start justify-between gap-3"><div class="min-w-0"><b class="text-xl">${multi?'Tambah beberapa semester':semesterAt(n)?'Ubah':'Tambah'} KHS</b><p class="mt-1 text-xs leading-5 text-ov">Data KHS dibaca, dicocokkan dengan kurikulum Excel, lalu divalidasi sebelum disimpan.</p></div><span class="shrink-0 rounded-full bg-sec px-3 py-1.5 text-[10px] font-bold text-se">TAHAP VERIFIKASI</span></div>
+  ${CURRICULUM.length?`<div class="mt-3 rounded-xl bg-[#f4f8f5] p-3 text-xs text-se">Kurikulum aktif: ${CURRICULUM.length} mata kuliah · ${escapeHTML(CURRICULUM_META?.program||'Program studi')}</div>`:'<div class="mt-3 rounded-xl bg-[#fff0d9] p-3 text-xs text-[#875b16]">Kurikulum acuan belum tersedia. Hubungi admin untuk mengimpor file Excel.</div>'}
+  ${multi?'<p class="mt-3 rounded-xl bg-[#f4f8f5] p-3 text-xs text-ov">Beberapa semester terbaca dari dokumen. Periksa pembagian semester dan hasil pencocokan di setiap kelompok.</p>':`<label class="mt-3 block text-sm font-semibold">${semesterLabel}<input id="u_n" type="number" min="1" max="14" value="${n}" class="mt-1 w-full rounded-xl border border-ol bg-sc px-4 py-3 font-normal"></label>`}
+  <label class="mt-3 flex cursor-pointer items-center gap-2 rounded-xl bg-sc px-4 py-3 text-sm"><span class="shrink-0">${ic('attach_file')}</span><span id="u_f" class="min-w-0 flex-1 truncate">${escapeHTML(draftFileName||'Pilih KHS PDF atau gambar')}</span><input type="file" accept="application/pdf,.pdf,image/*" class="hidden" onchange="pv(this)"></label>
   <div id="u_p"></div>
-  <div class="mt-3 bg-sc rounded-2xl p-3">
-    <div class="text-[10px] font-bold tracking-wider text-ov">HASIL DETEKSI KHS</div>
-    ${multi?groups.map(group=>`<section class="mt-3"><b class="text-sm">Semester ${group.n} · ${group.c.length} mata kuliah</b><div class="mt-2 space-y-2">${group.c.map(c=>`<div class="bg-white rounded-xl p-3 text-sm"><div class="flex justify-between items-center"><b>${c.name}</b><span class="font-bold ${gcol(c.g)} rounded-lg px-2 py-1">${c.g}</span></div><div class="text-xs text-ov mt-1">${c.sks} SKS • ${c.t==='W'?'Wajib':'Pilihan'}</div></div>`).join('')}</div></section>`).join(''):draft.length?`<div class="mt-3 space-y-2">${draft.map(c=>`<div class="bg-white rounded-xl p-3 text-sm"><div class="flex justify-between items-center"><b>${c.name}</b><span class="font-bold ${gcol(c.g)} rounded-lg px-2 py-1">${c.g}</span></div><div class="text-xs text-ov mt-1">${c.sks} SKS • ${c.t==='W'?'Wajib':'Pilihan'}</div></div>`).join('')}</div>`:'<p class="text-xs text-ov mt-2">Belum ada data yang terbaca. Upload file PDF KHS untuk memulai.</p>'}
+  <div class="mt-3 rounded-2xl bg-sc p-3">
+    <div class="flex flex-wrap items-center justify-between gap-2"><div class="text-[10px] font-bold tracking-wider text-ov">HASIL DETEKSI & VALIDASI</div><span class="text-[10px] font-bold text-ov">${courses.length} baris dibaca</span></div>
+    ${CURRICULUM.length?`<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">COCOK</div><b class="text-xl text-se">${matched}</b></div>
+      <div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">SEMESTER BEDA</div><b class="text-xl text-[#875b16]">${mismatched}</b></div>
+      <div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">AMBIGU</div><b class="text-xl text-[#875b16]">${ambiguous}</b></div>
+      <div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">TIDAK COCOK</div><b class="text-xl text-ero">${unmatched}</b></div>
+    </div>`:''}
+    ${multi?groups.map(group=>`<section class="mt-4"><div class="mb-2 flex flex-wrap items-center justify-between gap-2"><b class="text-sm">Semester ${group.n}</b><span class="text-[10px] text-ov">${group.c.length} mata kuliah</span></div><div class="space-y-2">${group.c.map(courseCard).join('')}</div></section>`).join(''):courses.length?`<div class="mt-3 space-y-2">${courses.map(courseCard).join('')}</div>`:'<p class="mt-2 text-xs text-ov">Belum ada data terbaca. Pilih dokumen KHS untuk memulai.</p>'}
   </div>
-  <button onclick="saveKHS()" class="w-full mt-4 bg-p text-white rounded-xl py-3 font-bold">Simpan & Hitung Ulang</button>`)
+  ${mismatched||ambiguous||unmatched?`<div class="mt-3 rounded-xl bg-[#fff7e6] p-3 text-xs leading-5 text-[#875b16]"><b>Perlu perhatian sebelum menyimpan.</b> Beberapa baris tidak cocok dengan acuan semester, ambigu, atau belum ada di Excel. Sistem mempertahankan data yang dibaca, tetapi tidak menganggapnya otomatis tervalidasi. Periksa kode/nama mata kuliah dan semester.</div>`:''}
+  <button onclick="saveKHS()" ${courses.length?'':'disabled'} class="mt-4 w-full rounded-xl bg-p py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Simpan KHS & Buat Analisis Akademik</button>
+  <button onclick="closeM()" class="mt-2 w-full rounded-xl bg-white py-3 text-sm font-bold text-ov">Batal</button>`);
 }
-
 function normalizeGradeToken(v){const t=String(v||'').toUpperCase().replace(/\s+/g,'').replace(/PLUS/,'+').replace(/MINUS/,'-').replace(/\+/g,'+');return t.includes('A+')?'A+':t.includes('A-')?'A-':t.includes('B+')?'B+':t.includes('B-')?'B-':t.includes('C+')?'C+':t.includes('C-')?'C-':t.includes('A')?'A':t.includes('B')?'B':t.includes('C')?'C':t.includes('D')?'D':t.includes('E')?'E':null}
 function normalizeKhsName(name){
   return String(name || '')
