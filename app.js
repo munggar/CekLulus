@@ -917,19 +917,19 @@ function curriculumDiagnostics(courses=CURRICULUM){
  const duplicateCodes=Object.entries(codes).filter(([,count])=>count>1).map(([code])=>code);
  const names=new Set(courses.map(item=>normalizeCourseKey(item.name)));
  const unresolved=[...new Set(courses.map(item=>String(item.prerequisite||'').trim()).filter(value=>{
-  if(!value||/^tidak ada$/i.test(value)||/^telah mengambil/i.test(value)||/^\\d/.test(value))return false;
-  const parts=value.split(/,|\\bdan\\b|\\bor\\b/i).map(normalizeCourseKey).filter(Boolean);
+  if(!value||/^tidak ada$/i.test(value)||/^telah mengambil/i.test(value)||/^\d/.test(value))return false;
+  const parts=value.split(/,|\bdan\b|\bor\b/i).map(normalizeCourseKey).filter(Boolean);
   return parts.some(part=>!names.has(part));
  }))];
  return{duplicateCodes,unresolved};
 }
 function normalizeExcelHeader(value){
- return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 }
 async function previewCurriculumExcel(input){
  const file=input?.files?.[0];if(!file)return;
  if(!window.XLSX){toast('Pembaca Excel belum termuat. Muat ulang halaman lalu coba lagi.');return}
- if(!/\\.(xlsx|xls)$/i.test(file.name)){toast('Pilih file Excel .xlsx atau .xls');return}
+ if(!/\.(xlsx|xls)$/i.test(file.name)){toast('Pilih file Excel .xlsx atau .xls');return}
  try{
   const buffer=await file.arrayBuffer();
   const workbook=window.XLSX.read(buffer,{type:'array',cellDates:false});
