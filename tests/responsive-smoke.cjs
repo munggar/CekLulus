@@ -109,26 +109,38 @@ async function main() {
           const app = document.querySelector('#app');
           const root = document.documentElement;
           const title = app?.querySelector('h1');
-          const description = tab === 'chat' ? app?.querySelector('p') : null;
+          const appRect = app?.getBoundingClientRect();
           const titleRect = title?.getBoundingClientRect();
-          const descriptionRect = description?.getBoundingClientRect();
+          const hero = app?.querySelector('.lulu-hero');
+          const heroHeading = hero?.querySelector('.lulu-hero-heading');
+          const heroCopy = hero?.querySelector('.lulu-hero-copy');
+          const heroStats = hero?.querySelector('.lulu-hero-stats');
+          const boxes = [heroHeading,heroCopy,heroStats,...(hero?.querySelectorAll('.lulu-hero-stat')||[])].filter(Boolean);
+          const rects = boxes.map(el=>({name:el.className,left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right,top:el.getBoundingClientRect().top,bottom:el.getBoundingClientRect().bottom,width:el.getBoundingClientRect().width}));
+          let heroOverlap=false;
+          for(let x=0;x<rects.length;x++)for(let y=x+1;y<rects.length;y++){
+            const p=rects[x],q=rects[y];
+            if(p.left<q.right-2&&p.right>q.left+2&&p.top<q.bottom-2&&p.bottom>q.top+2)heroOverlap=true;
+          }
           return {
-            width: window.innerWidth,
-            scrollWidth: root.scrollWidth,
-            appWidth: app?.getBoundingClientRect().width || 0,
-            titleVisible: !title || (titleRect.width > 0 && titleRect.left >= -2 && titleRect.right <= window.innerWidth + 2),
-            titleRect: titleRect ? { left:titleRect.left, right:titleRect.right, top:titleRect.top, bottom:titleRect.bottom, width:titleRect.width, font:getComputedStyle(title).fontSize, text:title.textContent } : null,
-            appRect: app ? { left:app.getBoundingClientRect().left, right:app.getBoundingClientRect().right, width:app.getBoundingClientRect().width } : null,
-            titleDescriptionOverlap: !!(titleRect && descriptionRect &&
-              titleRect.left < descriptionRect.right &&
-              titleRect.right > descriptionRect.left &&
-              titleRect.top < descriptionRect.bottom &&
-              titleRect.bottom > descriptionRect.top)
+            width:window.innerWidth,
+            scrollWidth:root.scrollWidth,
+            appWidth:appRect?.width||0,
+            appLeft:appRect?.left||0,
+            titleVisible:!title||(titleRect.width>0&&titleRect.left>=-2&&titleRect.right<=window.innerWidth+2),
+            heroVisible:!hero||(hero.getBoundingClientRect().right<=window.innerWidth+2&&hero.getBoundingClientRect().left>=-2),
+            heroOverlap,
+            heroChildren:rects
           };
         });
         assert.ok(metrics.scrollWidth <= width + 1, `Horizontal overflow at ${width}px on ${tab}: ${JSON.stringify(metrics)}`);
         assert.ok(metrics.titleVisible, `Page heading extends beyond viewport at ${width}px on ${tab}: ${JSON.stringify(metrics)}`);
-        assert.equal(metrics.titleDescriptionOverlap, false, `Chat title overlaps supporting text at ${width}px`);
+        assert.ok(metrics.appWidth<=1152+2, `Application container exceeds intended desktop width at ${width}px: ${JSON.stringify(metrics)}`);
+        assert.ok(metrics.appLeft>=-1, `Application container is outside viewport at ${width}px: ${JSON.stringify(metrics)}`);
+        if(tab==='chat'){
+          assert.ok(metrics.heroVisible, `Lulu hero exceeds viewport at ${width}px: ${JSON.stringify(metrics)}`);
+          assert.equal(metrics.heroOverlap,false,`Lulu hero content overlaps at ${width}px: ${JSON.stringify(metrics.heroChildren)}`);
+        }
         results.push({ width, tab, scrollWidth: metrics.scrollWidth });
       }
 
