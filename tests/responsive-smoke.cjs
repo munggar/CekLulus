@@ -110,7 +110,7 @@ async function main() {
           };
         });
         assert.ok(metrics.scrollWidth <= width + 1, `Horizontal overflow at ${width}px on ${tab}: ${JSON.stringify(metrics)}`);
-        assert.ok(metrics.titleVisible, `Page heading extends beyond viewport at ${width}px on ${tab}`);
+        assert.ok(metrics.titleVisible, `Page heading extends beyond viewport at ${width}px on ${tab}: ${JSON.stringify(metrics)}`);
         assert.equal(metrics.titleDescriptionOverlap, false, `Chat title overlaps supporting text at ${width}px`);
         results.push({ width, tab, scrollWidth: metrics.scrollWidth });
       }
