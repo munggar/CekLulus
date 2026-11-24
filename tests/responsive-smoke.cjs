@@ -283,7 +283,8 @@ async function main() {
     assert.equal(preview.draftCount, 3, `Excel parser should extract three valid rows. Diagnostics: ${JSON.stringify(preview)}`);
     assert.equal(preview.saveDisabled, false, 'Valid Excel preview should enable the import action.');
     assert.match(preview.text, /3 MATA KULIAH/, 'Excel preview should show all three valid rows.');
-    assert.match(preview.text, /03045081/, 'Excel preview should warn about the duplicate source code.');
+    assert.match(preview.text, /Penawaran lintas semester/, 'Excel preview should explain the allowed multi-semester offering.');
+    assert.doesNotMatch(preview.text, /Kode yang benar-benar bentrok/, 'A valid multi-semester course must not be presented as a code conflict.');
     assert.ok(preview.scrollWidth <= preview.viewport + 1, 'Excel preview must not create page-level horizontal overflow at 320px.');
 
     await page.evaluate(() => importCurriculum());
