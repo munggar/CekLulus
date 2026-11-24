@@ -416,13 +416,16 @@ async function getAiAnswer(question){
     name: NAME,
     id: USER?.id || 'guest',
     role: USER?.role || 'student',
+    angkatan: USER?.angkatan || null,
     cfg: { ...CFG },
-    khs: { semesters: semesters().map(s => ({ semester: s.n, courses: s.c.map(c => ({ name: c.name, sks: Number(c.sks) || 0, grade: c.g, type: c.t || 'W' })) })) },
+    khs: { semesters: semesters().map(s => ({ semester: s.n, courses: s.c.map(c => ({ name: c.name, code: c.curriculumCode||c.code||'', sks: Number(c.sks) || 0, grade: c.g, type: c.t || 'W', curriculumStatus:c.curriculumStatus||'unknown', curriculumSemester:c.curriculumSemester||null })) })) },
+    curriculum: CURRICULUM.map(course=>({code:course.code,name:course.name,semester:course.semester,sks:course.sks,category:course.category,prerequisite:course.prerequisite,notes:course.notes})),
     summary: {
       totalSks: agg().sks,
       ipk: agg().ipk,
       latestIps: latestIps(),
-      risky: risky().slice(0, 10)
+      risky: risky().slice(0, 10),
+      graduationAnalysis: curriculumAnalysis(semesters(),USER?.angkatan)
     }
   };
 
