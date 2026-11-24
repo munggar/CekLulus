@@ -86,6 +86,24 @@ async function main() {
       render();
     }, curriculum);
 
+    const curriculumWarnings = await page.evaluate(() => curriculumDiagnostics(CURRICULUM));
+    assert.deepEqual(curriculumWarnings.duplicateCodes, [], '03045081 is a valid multi-semester offering, not a conflicting code.');
+    assert.equal(curriculumWarnings.multiSemester.length, 1);
+    assert.equal(curriculumWarnings.multiSemester[0].code, '03045081');
+    assert.deepEqual(curriculumWarnings.multiSemester[0].allowedSemesters, [3, 5, 7]);
+    for (const validCourseName of [
+      'Dasar Sistem Digital dan Teknologi Informasi',
+      'Algoritma dan Dasar Pemrograman',
+      'Pengantar Manajemen dan Bisnis',
+      'Organisasi dan Arsitektur Sistem Komputer'
+    ]) {
+      assert.equal(curriculumWarnings.unresolved.includes(validCourseName), false, `Complete prerequisite names containing "dan" must not be split: ${validCourseName}`);
+    }
+    assert.ok(curriculumWarnings.unresolved.includes('Prinsip Sistem dan Teknologi Informasi'),
+      'An unmatched prerequisite must remain visible for administrator review.');
+    assert.ok(curriculumWarnings.unresolved.includes('Algoritma'),
+      'An incomplete prerequisite alias must remain visible rather than be guessed.');
+
     const graduationCheck = await page.evaluate(() => curriculumAnalysis([
       { n: 1, c: [
         { name: 'Ketrampilan Komunikasi', code: '03045081', curriculumCode: '03045081', sks: 2, g: 'D', t: 'P' }
