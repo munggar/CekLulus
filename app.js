@@ -303,7 +303,7 @@ function vChat(){
    : `Halo ${NAME}! 👋 Aku Lulu, partner akademikmu di CekLulus. Mulai dengan mengunggah KHS agar aku bisa membantu membaca progres akademik, menghitung IPK, menyusun target SKS, dan membuat rencana kelulusan yang lebih terarah.`;
   st.chat=[{r:'b',h:`${welcome}<div class="rounded-2xl bg-sc p-3 mt-3 text-xs"><b class="text-p">Yang bisa kita kerjakan bersama</b><div class="grid grid-cols-2 gap-2 mt-2"><span>✦ Analisis KHS & IPK</span><span>✦ Strategi perbaikan nilai</span><span>✦ Simulasi SKS semester depan</span><span>✦ Estimasi waktu kelulusan</span></div></div>`,t:tm()}];
  }
- const a=agg(),n=latestSem(),P=project(20,3.5,false),remaining=Math.max(0,CFG.total-a.sks);
+ const a=agg(),n=latestSem(),P=project(20,3.5,false),remaining=Math.max(0,CFG.total-a.sks),academic=curriculumAnalysis(semesters(),USER?.angkatan);
  const messages=st.chat.map(m=>m.r==='u'
   ? `<div class="flex flex-col items-end"><div class="max-w-[88%] rounded-2xl rounded-tr-md bg-p px-4 py-3 text-sm leading-6 text-white shadow-sm">${m.h}</div><small class="mt-1 pr-1 text-[11px] text-ov">${m.t}</small></div>`
   : `<div class="flex items-start gap-3"><div class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sec text-p">${ic('auto_awesome')}</div><div class="min-w-0 max-w-[92%]"><div class="rounded-2xl rounded-tl-md border border-ol/50 bg-white p-4 text-sm leading-6 text-[#25332e] shadow-sm">${m.h}</div><small class="mt-1 block pl-1 text-[11px] text-ov">Lulu AI · ${m.t}</small></div></div>`).join('');
@@ -314,12 +314,14 @@ function vChat(){
     <div class="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[#b9eada]/10 blur-3xl"></div>
     <div class="relative">
      <div class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-extrabold tracking-[.16em] text-[#c9f3e5]"><span class="h-2 w-2 rounded-full bg-[#8de0bd]"></span LULU AI · ASISTEN AKADEMIK</div>
-     <h1 class="mt-4 max-w-2xl text-[29px] font-extrabold leading-tight tracking-tight sm:text-[38px]">Perjalanan menuju kelulusan dimulai dari percakapan.</h1>
-     <p class="mt-3 max-w-2xl text-sm leading-6 text-white/75 sm:text-base">Tanyakan apa pun tentang KHS, IPK, SKS, mata kuliah, dan strategi studimu. Lulu membantu dengan mempertimbangkan data akademik yang tersimpan di akunmu.</p>
-     <div class="mt-5 grid max-w-xl grid-cols-3 gap-2 sm:gap-3">
-      <div class="rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">IPK SAAT INI</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${f(a.ipk)}</div><div class="text-[10px] text-white/60">dari 4,00</div></div>
-      <div class="rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">SKS SELESAI</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${a.sks}</div><div class="text-[10px] text-white/60">dari ${CFG.total} SKS</div></div>
-      <div class="rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">SEMESTER</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${n||'—'}</div><div class="text-[10px] text-white/60">tercatat</div></div>
+     <div class="mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(220px,.9fr)] lg:items-end">
+      <h1 class="min-w-0 break-words text-[clamp(1.8rem,4.2vw,2.65rem)] font-extrabold leading-[1.12] tracking-tight">Perjalanan menuju kelulusan dimulai dari percakapan.</h1>
+      <div class="min-w-0 rounded-2xl border border-white/10 bg-white/[0.06] p-4"><p class="text-sm leading-6 text-white/80 sm:text-base">Tanyakan apa pun tentang KHS, IPK, SKS, mata kuliah, dan strategi studimu. Lulu membantu dengan mempertimbangkan data akademik yang tersimpan di akunmu.</p><p class="mt-3 text-[10px] font-bold tracking-wider text-[#b9eada]">ANALISIS AKADEMIK BERBASIS KHS & KURIKULUM</p></div>
+     </div>
+     <div class="mt-5 grid max-w-2xl grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:gap-3">
+      <div class="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">IPK SAAT INI</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${f(a.ipk)}</div><div class="text-[10px] text-white/60">dari 4,00</div></div>
+      <div class="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">SKS SELESAI</div><div class="mt-1 text-2xl font-extrabold sm:text-3xl">${a.sks}</div><div class="text-[10px] text-white/60">dari ${CFG.total} SKS</div></div>
+      <div class="min-w-0 rounded-2xl border border-white/10 bg-white/10 p-3"><div class="text-[10px] font-bold tracking-wider text-white/60">ANGKATAN / SEMESTER</div><div class="mt-1 break-words text-2xl font-extrabold sm:text-3xl">${USER?.angkatan||n||'—'}</div><div class="text-[10px] text-white/60">${USER?.angkatan?'tahun masuk':'semester terakhir tercatat'}</div></div>
      </div>
     </div>
    </div>
@@ -328,7 +330,7 @@ function vChat(){
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-ol/50 px-4 py-4 sm:px-6">
      <div class="flex min-w-0 items-center gap-3">
       <div class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-sec text-p">${ic('smart_toy')}</div>
-      <div class="min-w-0"><div class="font-extrabold text-p">Ruang konsultasi Lulu</div><div class="mt-0.5 text-xs text-ov">Konteks akademik: ${n?'Semester '+n+' · '+semesters().length+' semester tersimpan':'belum ada KHS tersimpan'}</div></div>
+      <div class="min-w-0"><div class="font-extrabold text-p">Ruang konsultasi Lulu</div><div class="mt-0.5 break-words text-xs text-ov">Konteks akademik: ${n?'Semester '+n+' · '+semesters().length+' semester tersimpan':'belum ada KHS tersimpan'} · ${CURRICULUM.length?'kurikulum aktif':'kurikulum belum diatur'}</div></div>
      </div>
      <div class="flex items-center gap-2 rounded-full bg-[#e8f7ef] px-3 py-1.5 text-[10px] font-bold text-[#176444]"><span class="h-2 w-2 rounded-full bg-[#21a66b]"></span> SIAP MEMBANTU</div>
     </div>
@@ -356,10 +358,11 @@ function vChat(){
     <p class="mt-1 text-xs leading-5 text-ov">Ringkasan yang dapat digunakan Lulu untuk memberi saran lebih relevan.</p>
     <div class="mt-4 space-y-2">
      <div class="flex items-center justify-between rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Predikat IPK</span><b class="text-sm text-p">${a.sks?pred(a.ipk):'Belum tersedia'}</b></div>
-     <div class="flex items-center justify-between rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Sisa SKS target</span><b class="text-sm text-p">${remaining} SKS</b></div>
-     <div class="flex items-center justify-between rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Peluang lulus tepat waktu*</span><b class="text-sm text-p">${P.pOn}%</b></div>
+     <div class="flex items-center justify-between gap-3 rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Sisa SKS target</span><b class="shrink-0 text-sm text-p">${remaining} SKS</b></div>
+     <div class="flex items-center justify-between gap-3 rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Estimasi semester lulus</span><b class="shrink-0 text-right text-sm text-p">${academic?(academic.estimatedTerm||'Semester '+academic.estimatedSemester):'Menunggu kurikulum'}</b></div>
+     <div class="flex items-center justify-between gap-3 rounded-xl bg-[#f4f8f5] p-3"><span class="text-xs text-ov">Mata kuliah wajib tuntas</span><b class="shrink-0 text-sm text-p">${academic?academic.completedRequired+'/'+academic.requiredCount:'—'}</b></div>
     </div>
-    <p class="mt-3 text-[10px] leading-4 text-ov">*Estimasi simulasi berdasarkan data yang tersedia, bukan keputusan resmi kampus.</p>
+    <p class="mt-3 text-[10px] leading-4 text-ov">${academic?'Estimasi dihitung dari kurikulum aktif, SKS, mata kuliah wajib yang belum tuntas, dan angkatan bila tersedia.':'Admin perlu mengimpor kurikulum Excel untuk mengaktifkan estimasi kelulusan berdasarkan daftar mata kuliah wajib.'} Estimasi bukan keputusan resmi kampus.</p>
     <button onclick="go('ringkasan')" class="mt-4 w-full rounded-xl border border-ol/70 py-3 text-sm font-bold text-p hover:bg-[#f4f8f5]">${ic('analytics')} Lihat ringkasan lengkap</button>
    </section>
 
