@@ -761,16 +761,177 @@ function adminOpenStudent(token){let id;try{id=decodeURIComponent(atob(token))}c
  ${semesters.length?`<div class="mt-4 space-y-3">${[...semesters].reverse().map(s=>{const m=sem(s);return`<section class="bg-sc rounded-xl p-3"><div class="flex justify-between"><b>Semester ${s.n}</b><span class="text-sm">IPS ${f(m.ips)} · ${m.sks} SKS</span></div>${s.c.map(c=>`<div class="flex justify-between gap-3 text-sm mt-2"><span>${escapeHTML(c.name)} <small class="text-ov">${c.sks} SKS</small></span><b>${escapeHTML(c.g)}</b></div>`).join('')}</section>`}).join('')}</div>`:'<p class="bg-sc rounded-xl p-4 mt-4 text-sm text-ov">Mahasiswa ini belum mengunggah KHS.</p>'}
  <button onclick="closeM()" class="w-full mt-4 bg-p text-white rounded-xl py-3 font-bold">Tutup</button>`)
 }
-function vAdmin(){const list=adminStudents();return`<p class="mt-3 text-[11px] font-bold tracking-wider text-se uppercase">Panel Administrasi</p>
- <h1 class="text-[30px] leading-9 font-extrabold text-p mt-1">Data Mahasiswa</h1>
- <p class="text-sm text-ov mt-2">Lihat akun dan data KHS mahasiswa yang tersimpan di database.</p>
- <button onclick="cfgModal()" class="w-full mt-4 bg-sc rounded-xl py-3 font-bold">${ic('rule')} Aturan Studi</button>
- <div class="grid grid-cols-2 gap-3 mt-5"><div class="bg-pc text-white rounded-2xl p-4"><div class="text-[10px] font-bold tracking-wider opacity-75">AKUN MAHASISWA</div><div class="text-3xl font-extrabold mt-2">${list.length}</div></div><div class="bg-sec rounded-2xl p-4"><div class="text-[10px] font-bold tracking-wider text-se">SUDAH UPLOAD KHS</div><div class="text-3xl font-extrabold mt-2">${list.filter(s=>s.data?.sems?.length).length}</div></div></div>
- <div class="flex justify-between items-center mt-6 mb-2"><b class="text-lg">Daftar Mahasiswa</b><span class="text-xs text-ov">${list.length} akun</span></div>
- ${list.length?list.map(s=>`<article class="bg-white rounded-2xl p-4 mb-3 shadow-sm"><div class="flex items-start justify-between gap-3"><div class="min-w-0"><b class="block truncate">${escapeHTML(s.name)}</b><div class="text-xs text-ov mt-1">${escapeHTML(s.id)}${s.prodi?' · '+escapeHTML(s.prodi):''}</div></div><span class="shrink-0 text-[11px] font-bold rounded-full px-2.5 py-1 ${s.data?.sems?.length?'bg-sec text-se':'bg-sc text-ov'}">${s.data?.sems?.length?'KHS ada':'Belum ada KHS'}</span></div>
- <div class="grid grid-cols-3 gap-2 mt-4 text-center"><div class="bg-sc rounded-lg p-2"><div class="text-[10px] text-ov">SEMESTER</div><b>${s.data?.sems?.length||0}</b></div><div class="bg-sc rounded-lg p-2"><div class="text-[10px] text-ov">SKS</div><b>${s.stats.sks}</b></div><div class="bg-sc rounded-lg p-2"><div class="text-[10px] text-ov">IPK</div><b>${f(s.stats.ipk)}</b></div></div>
- <button onclick="adminOpenStudent('${adminToken(s.id)}')" class="w-full mt-3 bg-p text-white rounded-xl py-2.5 text-sm font-bold">${ic('visibility')} Lihat detail KHS</button></article>`).join(''):'<p class="bg-white rounded-2xl p-5 text-sm text-ov">Belum ada akun mahasiswa. Mahasiswa dapat membuat akun dari pilihan Mahasiswa pada layar masuk.</p>'}
- <p class="text-center text-xs text-ov mt-5">Data mahasiswa tersimpan di PostgreSQL.</p>`}
+function curriculumDiagnostics(courses=CURRICULUM){
+ const codes={};courses.forEach(item=>{const code=String(item.code||'').trim();if(code)codes[code]=(codes[code]||0)+1});
+ const duplicateCodes=Object.entries(codes).filter(([,count])=>count>1).map(([code])=>code);
+ const names=new Set(courses.map(item=>normalizeCourseKey(item.name)));
+ const unresolved=[...new Set(courses.map(item=>String(item.prerequisite||'').trim()).filter(value=>{
+  if(!value||/^tidak ada$/i.test(value)||/^telah mengambil/i.test(value)||/^\\d/.test(value))return false;
+  const parts=value.split(/,|\\bdan\\b|\\bor\\b/i).map(normalizeCourseKey).filter(Boolean);
+  return parts.some(part=>!names.has(part));
+ }))];
+ return{duplicateCodes,unresolved};
+}
+function normalizeExcelHeader(value){
+ return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+async function previewCurriculumExcel(input){
+ const file=input?.files?.[0];if(!file)return;
+ if(!window.XLSX){toast('Pembaca Excel belum termuat. Muat ulang halaman lalu coba lagi.');return}
+ if(!/\\.(xlsx|xls)$/i.test(file.name)){toast('Pilih file Excel .xlsx atau .xls');return}
+ try{
+  const buffer=await file.arrayBuffer();
+  const workbook=window.XLSX.read(buffer,{type:'array',cellDates:false});
+  const sheetName=workbook.SheetNames[0];
+  if(!sheetName)throw new Error('Workbook tidak memiliki sheet.');
+  const sheet=workbook.Sheets[sheetName];
+  const rows=window.XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false});
+  const headerIndex=rows.findIndex(row=>{
+    const cells=row.map(normalizeExcelHeader);
+    return cells.includes('semester')&&cells.some(value=>value==='kode mk'||value==='kode mata kuliah')&&cells.some(value=>value==='nama mk'||value==='nama mata kuliah')&&cells.includes('sks');
+  });
+  if(headerIndex<0)throw new Error('Header wajib tidak ditemukan. Diperlukan kolom semester, kode_mk, nama_mk, dan sks.');
+  const headers=rows[headerIndex].map(normalizeExcelHeader);
+  const findIndex=names=>headers.findIndex(value=>names.includes(value));
+  const columns={
+    semester:findIndex(['semester']),
+    code:findIndex(['kode mk','kode mata kuliah']),
+    name:findIndex(['nama mk','nama mata kuliah']),
+    category:findIndex(['kategori','category']),
+    sks:findIndex(['sks']),
+    prerequisite:findIndex(['mata kuliah prasyarat','prasyarat','mata kuliah prasyarat pengambilan']),
+    notes:findIndex(['keterangan catatan','keterangan','catatan','keterangan catatan tambahan'])
+  };
+  const courses=[],rowErrors=[];
+  for(let r=headerIndex+1;r<rows.length;r++){
+    const row=rows[r]||[];
+    const name=String(row[columns.name]||'').trim();
+    const code=String(row[columns.code]||'').trim();
+    if(!name&&!code)continue;
+    const semesterText=String(row[columns.semester]||'').trim();
+    const semMatch=semesterText.match(/(1[0-4]|[1-9])/);
+    const semester=Number(semMatch?.[1]||semesterText);
+    const sks=Number(String(row[columns.sks]||'').replace(',','.'));
+    if(!name||!Number.isInteger(semester)||semester<1||semester>14||!Number.isInteger(sks)||sks<1||sks>12){
+      rowErrors.push(r+1);continue;
+    }
+    courses.push({
+      semester,code,name,
+      category:columns.category>=0?String(row[columns.category]||'').trim():'',
+      sks,
+      prerequisite:columns.prerequisite>=0?String(row[columns.prerequisite]||'').trim():'',
+      notes:columns.notes>=0?String(row[columns.notes]||'').trim():''
+    });
+  }
+  if(!courses.length)throw new Error('Tidak ada baris mata kuliah valid yang dapat diimpor.');
+  const diagnostics=curriculumDiagnostics(courses);
+  const contextRows=rows.slice(0,headerIndex).flat().map(value=>String(value||'').trim()).filter(Boolean);
+  const program=contextRows.find(value=>/program studi/i.test(value))||'Program Studi belum diketahui';
+  const institution=contextRows.find(value=>/universitas|uhamka/i.test(value))||'';
+  CURRICULUM_DRAFT=courses;
+  CURRICULUM_DRAFT_INFO={sourceFile:file.name,program,institution,sheet:sheetName,rowErrors,diagnostics};
+  const preview=document.getElementById('curriculum-preview');
+  if(preview)preview.innerHTML=`<div class="rounded-2xl border border-[#d8e6de] bg-[#f6faf7] p-4">
+   <div class="flex flex-wrap items-center justify-between gap-2"><b class="text-sm text-p">Pratinjau impor berhasil dibaca</b><span class="rounded-full bg-sec px-2 py-1 text-[10px] font-bold text-se">${courses.length} MATA KULIAH</span></div>
+   <p class="mt-1 break-words text-xs text-ov">${escapeHTML(file.name)} · Sheet: ${escapeHTML(sheetName)}</p>
+   <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3"><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">SEMESTER</div><b class="text-xl">${new Set(courses.map(course=>course.semester)).size}</b></div><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">TOTAL SKS DATA</div><b class="text-xl">${courses.reduce((sum,course)=>sum+course.sks,0)}</b></div><div class="rounded-xl bg-white p-3"><div class="text-[10px] text-ov">KODE GANDA</div><b class="text-xl">${diagnostics.duplicateCodes.length}</b></div></div>
+   ${diagnostics.duplicateCodes.length?`<p class="mt-3 rounded-xl bg-[#fff7e6] p-3 text-xs text-[#875b16]"><b>Perlu ditinjau:</b> kode berulang ${diagnostics.duplicateCodes.map(escapeHTML).join(', ')}. Baris tidak dihapus; sistem tetap mempertahankan data sumber.</p>`:''}
+   ${diagnostics.unresolved.length?`<p class="mt-2 rounded-xl bg-[#fff7e6] p-3 text-xs text-[#875b16]"><b>Prasyarat yang tidak cocok dengan nama mata kuliah di sheet:</b> ${diagnostics.unresolved.slice(0,6).map(escapeHTML).join('; ')}${diagnostics.unresolved.length>6?' dan lainnya':''}. Periksa kembali referensi ini sebelum dijadikan aturan final.</p>`:''}
+   ${rowErrors.length?`<p class="mt-2 rounded-xl bg-erc p-3 text-xs text-ero">Baris dilewati karena format tidak valid: ${rowErrors.slice(0,12).join(', ')}${rowErrors.length>12?'…':''}.</p>`:''}
+   <div class="mt-3 overflow-x-auto"><table class="w-full min-w-[520px] text-left text-xs"><thead><tr class="border-b border-ol text-ov"><th class="p-2">Semester</th><th class="p-2">Kode</th><th class="p-2">Mata Kuliah</th><th class="p-2">SKS</th><th class="p-2">Kategori</th></tr></thead><tbody>${courses.slice(0,6).map(course=>`<tr class="border-b border-ol/50"><td class="p-2">${course.semester}</td><td class="p-2">${escapeHTML(course.code)}</td><td class="p-2">${escapeHTML(course.name)}</td><td class="p-2">${course.sks}</td><td class="p-2">${escapeHTML(course.category)}</td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+  const saveButton=document.getElementById('curriculum-import-button');
+  if(saveButton)saveButton.disabled=rowErrors.length>0;
+  toast('File Excel berhasil dibaca. Periksa peringatan sebelum menyimpan.');
+ }catch(error){
+  CURRICULUM_DRAFT=null;CURRICULUM_DRAFT_INFO=null;
+  const preview=document.getElementById('curriculum-preview');
+  if(preview)preview.innerHTML=`<p class="rounded-xl bg-erc p-3 text-sm text-ero">${escapeHTML(error.message)}</p>`;
+  const saveButton=document.getElementById('curriculum-import-button');if(saveButton)saveButton.disabled=true;
+ }
+}
+function importCurriculum(){
+ if(!CURRICULUM_DRAFT?.length)return toast('Pilih dan baca file Excel terlebih dahulu.');
+ modal(`<div class="flex items-start gap-3"><div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#fff0d9] text-[#875b16]">${ic('upload_file')}</div><div><b class="text-lg">Ganti kurikulum aktif?</b><p class="mt-2 text-sm text-ov">Data kurikulum saat ini akan digantikan oleh ${CURRICULUM_DRAFT.length} mata kuliah dari file ${escapeHTML(CURRICULUM_DRAFT_INFO.sourceFile)}. Data KHS mahasiswa tidak dihapus.</p></div></div>
+ <div class="mt-5 grid grid-cols-2 gap-2"><button onclick="closeM()" class="rounded-xl bg-sc py-3 font-bold">Batal</button><button onclick="commitCurriculumImport()" class="rounded-xl bg-p py-3 font-bold text-white">Ya, impor data</button></div>`);
+}
+async function commitCurriculumImport(){
+ try{
+  const payload=await api('/api/admin/curriculum',{method:'POST',body:{
+   courses:CURRICULUM_DRAFT,
+   sourceFile:CURRICULUM_DRAFT_INFO.sourceFile,
+   program:CURRICULUM_DRAFT_INFO.program,
+   institution:CURRICULUM_DRAFT_INFO.institution,
+   sheet:CURRICULUM_DRAFT_INFO.sheet
+  }});
+  closeM();CURRICULUM_DRAFT=null;CURRICULUM_DRAFT_INFO=null;
+  await loadCurriculum();
+  const result=await api('/api/admin/students');ADMIN_STUDENTS=result.students||[];
+  render();toast(`Kurikulum disimpan: ${payload.meta.courseCount} mata kuliah`);
+ }catch(error){toast('Impor gagal: '+error.message)}
+}
+async function saveStudentCohort(token){
+ let id;try{id=decodeURIComponent(atob(token))}catch(error){return toast('Akun mahasiswa tidak valid.')}
+ const input=document.getElementById('cohort_'+token);
+ const angkatan=Number(input?.value);
+ if(!Number.isInteger(angkatan)||angkatan<2000||angkatan>new Date().getFullYear())return toast('Masukkan tahun angkatan yang valid.');
+ try{
+  await api('/api/admin/students/'+encodeURIComponent(id)+'/angkatan',{method:'PUT',body:{angkatan}});
+  const result=await api('/api/admin/students');ADMIN_STUDENTS=result.students||[];
+  render();toast('Tahun angkatan berhasil disimpan.');
+ }catch(error){toast('Gagal menyimpan angkatan: '+error.message)}
+}
+function vAdmin(){
+ const list=adminStudents();
+ const meta=CURRICULUM_META;
+ const diagnostics=curriculumDiagnostics(CURRICULUM);
+ const uploaded=!!(meta&&CURRICULUM.length);
+ return `<div class="space-y-5 pb-6">
+  <section class="rounded-3xl bg-pc p-5 text-white sm:p-6">
+   <div class="text-[10px] font-bold tracking-[.18em] text-sec">PANEL ADMINISTRATOR</div>
+   <h1 class="mt-2 text-3xl font-extrabold">Pusat data akademik</h1>
+   <p class="mt-2 max-w-2xl text-sm leading-6 text-white/75">Kelola kurikulum acuan, periksa data KHS, dan pantau estimasi kelulusan mahasiswa berdasarkan riwayat akademik yang tersimpan.</p>
+   <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <div class="rounded-2xl bg-white/10 p-4"><div class="text-[10px] font-bold text-white/70">AKUN MAHASISWA</div><div class="mt-1 text-3xl font-extrabold">${list.length}</div></div>
+    <div class="rounded-2xl bg-white/10 p-4"><div class="text-[10px] font-bold text-white/70">SUDAH ADA KHS</div><div class="mt-1 text-3xl font-extrabold">${list.filter(s=>s.data?.sems?.length).length}</div></div>
+    <div class="col-span-2 rounded-2xl bg-white/10 p-4 sm:col-span-1"><div class="text-[10px] font-bold text-white/70">KURIKULUM AKTIF</div><div class="mt-1 text-3xl font-extrabold">${CURRICULUM.length||0}</div></div>
+   </div>
+  </section>
+
+  <section class="rounded-3xl border border-ol/60 bg-white p-5 shadow-sm sm:p-6">
+   <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0"><div class="text-[10px] font-bold tracking-wider text-se">MASTER DATA PROGRAM STUDI</div><h2 class="mt-1 text-xl font-extrabold text-p">Kurikulum & prasyarat mata kuliah</h2><p class="mt-1 text-sm leading-5 text-ov">File Excel menjadi acuan pencocokan nama mata kuliah, semester rekomendasi, SKS, dan prasyarat saat mahasiswa mengunggah KHS.</p></div>
+    <span class="rounded-full ${uploaded?'bg-sec text-se':'bg-sc text-ov'} px-3 py-1.5 text-[10px] font-bold">${uploaded?'KURIKULUM AKTIF':'BELUM DIIMPOR'}</span>
+   </div>
+   ${meta?`<div class="mt-4 rounded-2xl bg-[#f4f8f5] p-4"><b class="block break-words text-sm text-p">${escapeHTML(meta.sourceFile||'File kurikulum')}</b><div class="mt-1 text-xs leading-5 text-ov">${escapeHTML(meta.program||'')} · ${escapeHTML(meta.sheet||'')} · ${CURRICULUM.length} mata kuliah · ${new Set(CURRICULUM.map(item=>item.semester)).size} semester</div><div class="mt-1 text-[10px] text-ov">Terakhir diperbarui: ${meta.importedAt?new Date(meta.importedAt).toLocaleString('id-ID'):'Tidak tercatat'}</div></div>`:''}
+   ${diagnostics.duplicateCodes.length?`<p class="mt-3 rounded-xl bg-[#fff7e6] p-3 text-xs leading-5 text-[#875b16]"><b>Peringatan data sumber:</b> kode mata kuliah ganda: ${diagnostics.duplicateCodes.map(escapeHTML).join(', ')}. Data dipertahankan sesuai file Excel.</p>`:''}
+   ${diagnostics.unresolved.length?`<p class="mt-2 rounded-xl bg-[#fff7e6] p-3 text-xs leading-5 text-[#875b16]"><b>Prasyarat untuk ditinjau:</b> ${diagnostics.unresolved.slice(0,5).map(escapeHTML).join('; ')}${diagnostics.unresolved.length>5?' dan lainnya':''}. Sistem tidak akan menebak mata kuliah pengganti.</p>`:''}
+   <input id="curriculum_excel" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="hidden" onchange="previewCurriculumExcel(this)">
+   <div class="mt-4 flex flex-col gap-2 sm:flex-row"><button onclick="document.getElementById('curriculum_excel').click()" class="rounded-xl bg-p px-4 py-3 text-sm font-bold text-white">${ic('upload_file')} Pilih file Excel</button><button onclick="cfgModal()" class="rounded-xl bg-sc px-4 py-3 text-sm font-bold text-p">${ic('rule')} Aturan Studi</button></div>
+   <div id="curriculum-preview" class="mt-4"></div>
+   <button id="curriculum-import-button" onclick="importCurriculum()" disabled class="mt-3 w-full rounded-xl bg-pc py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Tinjau & simpan kurikulum dari Excel</button>
+  </section>
+
+  <section>
+   <div class="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 class="text-xl font-extrabold text-p">Monitoring mahasiswa</h2><p class="mt-1 text-xs text-ov">Estimasi kelulusan dihitung dari KHS, kurikulum aktif, beban SKS, dan tahun angkatan.</p></div><span class="rounded-full bg-sc px-3 py-1.5 text-xs font-bold text-ov">${list.length} akun</span></div>
+   ${list.length?list.map(student=>{
+    const history=student.data?.sems||[];
+    const analysis=curriculumAnalysis(history,student.angkatan);
+    const token=adminToken(student.id);
+    const stats=student.stats;
+    const latest=history.reduce((max,item)=>Math.max(max,Number(item.n)||0),0);
+    return `<article class="mb-3 rounded-2xl border border-ol/60 bg-white p-4 shadow-sm sm:p-5">
+     <div class="flex flex-wrap items-start justify-between gap-3"><div class="min-w-0"><b class="block break-words text-base text-p">${escapeHTML(student.name)}</b><div class="mt-1 break-all text-xs text-ov">${escapeHTML(student.id)}${student.prodi?' · '+escapeHTML(student.prodi):''}</div></div><span class="rounded-full ${history.length?'bg-sec text-se':'bg-sc text-ov'} px-2.5 py-1 text-[10px] font-bold">${history.length?'KHS tersimpan':'Belum ada KHS'}</span></div>
+     <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">SEMESTER AKTIF</div><b class="text-xl text-p">${latest||'—'}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">TOTAL SKS</div><b class="text-xl text-p">${stats.sks}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">IPK</div><b class="text-xl text-p">${f(stats.ipk)}</b></div><div class="rounded-xl bg-[#f4f8f5] p-3"><div class="text-[10px] text-ov">ESTIMASI LULUS</div><b class="text-base text-p">${analysis?(analysis.estimatedTerm||'Semester '+analysis.estimatedSemester):'Impor kurikulum'}</b></div></div>
+     <div class="mt-3 rounded-xl border border-ol/60 p-3"><div class="flex flex-wrap items-center justify-between gap-2"><b class="text-xs text-p">Tahun angkatan</b><span class="text-[10px] text-ov">${student.angkatan?'Dasar estimasi tahun kalender':'Belum diisi'}</span></div><div class="mt-2 flex flex-wrap gap-2"><input id="cohort_${token}" type="number" min="2000" max="${new Date().getFullYear()}" value="${student.angkatan||''}" placeholder="Contoh: 2023" class="min-w-0 flex-1 rounded-lg border border-ol bg-white px-3 py-2 text-sm"><button onclick="saveStudentCohort('${token}')" class="rounded-lg bg-sc px-4 py-2 text-xs font-bold text-p">Simpan angkatan</button></div></div>
+     ${analysis?`<div class="mt-3 flex flex-wrap items-center gap-2 text-xs"><span class="rounded-full bg-sec px-2.5 py-1 font-bold text-se">Kurikulum: ${analysis.completedRequired}/${analysis.requiredCount} wajib terpenuhi</span><span class="rounded-full ${analysis.missing.length?'bg-[#fff7e6] text-[#875b16]':'bg-sec text-se'} px-2.5 py-1 font-bold">${analysis.missing.length} wajib belum tuntas</span><span class="rounded-full ${analysis.atRisk.length?'bg-erc text-ero':'bg-sc text-ov'} px-2.5 py-1 font-bold">${analysis.atRisk.length} nilai berisiko</span></div>`:''}
+     <button onclick="adminOpenStudent('${token}')" class="mt-3 w-full rounded-xl bg-p text-sm font-bold text-white py-3">${ic('analytics')} Buka analisis akademik lengkap</button>
+    </article>`;
+   }).join(''):'<p class="rounded-2xl bg-white p-5 text-sm text-ov">Belum ada akun mahasiswa terdaftar.</p>'}
+  </section>
+  <p class="pb-4 text-center text-[11px] leading-5 text-ov">Prediksi merupakan estimasi berbasis kurikulum dan riwayat KHS, bukan keputusan kelulusan resmi kampus.</p>
+ </div>`;
+}
 function render(keep){const localFileWarning=location.protocol==='file:'?'<div class="bg-erc text-ero rounded-2xl p-3 mt-3 text-xs"><b>Penyimpanan browser tidak stabil.</b> Jangan buka index.html langsung. Jalankan <code>npm --prefix server start</code>, lalu buka <code>http://localhost:3001</code> dengan browser yang sama setiap kali.</div>':'';if(USER?.role==='admin'){$('#nav').innerHTML='';$('#app').innerHTML=localFileWarning+'<div class="max-w-2xl mx-auto">'+vAdmin()+'</div>';return}
  $('#nav').innerHTML=TABS.map(t=>`<button onclick="go('${t[0]}')" class="flex min-w-0 flex-col items-center gap-0.5 px-2 py-1.5 text-[10px] font-bold tracking-wide ${tab===t[0]?'text-p':'text-ov'}"><span class="ms ${tab===t[0]?'fill':''}">${t[1]}</span>${t[2]}</button>`).join('');
  const content={ringkasan:vRingkasan,matkul:vMatkul,simulasi:vSimulasi,chat:vChat,riwayat:vRiwayat}[tab]();
